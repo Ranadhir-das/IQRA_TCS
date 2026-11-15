@@ -1,0 +1,31 @@
+# IQRA TCS Calling CRM — Phase 1 Dependencies
+# Install with: pip install -r requirements.txt
+
+# ─── Core Framework ───────────────────────────────────────────────────────────
+Django==6.1.1
+djangorestframework==3.18.1
+
+# ─── Authentication & JWT ─────────────────────────────────────────────────────
+# Provides short-lived access tokens, refresh tokens, and blacklist-based revocation
+djangorestframework-simplejwt==5.5.0
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+psycopg==3.3.5
+psycopg-binary==3.3.5
+
+# ─── Configuration ────────────────────────────────────────────────────────────
+# Environment variable management with DATABASE_URL parsing
+django-environ==0.14.0
+
+# ─── CORS ─────────────────────────────────────────────────────────────────────
+django-cors-headers==4.9.0
+
+# ─── ASGI / Deployment ────────────────────────────────────────────────────────
+asgiref==3.12.1
+
+# ─── Timezone Data ────────────────────────────────────────────────────────────
+# Required for USE_TZ=True with Asia/Kolkata on platforms without system tz data
+tzdata==2026.3
+
+# ─── Utilities ────────────────────────────────────────────────────────────────
+sqlparse==0.6.0

@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "apps.leads",
     "apps.calls",
     "apps.followups",
+    "apps.reports",
 ]
 
 MIDDLEWARE = [
@@ -128,6 +129,11 @@ LEAD_IMPORT_MAX_XLSX_SHARED_STRINGS = 100000
 LEAD_IMPORT_MAX_TEXT_LENGTH = 5000
 LEAD_IMPORT_STAGING_TTL_SECONDS = 30 * 60
 LEAD_IMPORT_PROCESSING_RECOVERY_SECONDS = 60 * 60
+
+# Reporting & export guardrails (Phase 4.1).
+REPORT_DEFAULT_DATE_RANGE_DAYS = 30
+REPORT_MAX_DATE_RANGE_DAYS = 366
+REPORT_EXPORT_MAX_ROWS = 10000
 
 # ─── Django REST Framework ────────────────────────────────────────────────────
 REST_FRAMEWORK = {

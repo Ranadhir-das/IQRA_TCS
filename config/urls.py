@@ -25,4 +25,7 @@ urlpatterns = [
 
     # Follow-ups — Phase 3.3.2
     path("api/v1/follow-ups/", include("apps.followups.api.urls")),
+
+    # Admin dashboard & reporting — Phase 4.1
+    path("api/v1/reports/", include("apps.reports.api.urls")),
 ]

@@ -227,3 +227,141 @@ Independent Django + Django REST Framework + PostgreSQL backend for the **IQRA T
     ]
   }
   ```
+
+---
+
+## 6. Admin Dashboard, Employee Performance & Exports (`/api/v1/reports/`)
+
+### 6.1 Access Control & Role Semantics
+
+- **Permissions**: Active administrators (`role=ADMIN` or `is_superuser=True`) only (`IsAuthenticated`, `IsAdminRole`).
+  - Anonymous users receive `401 Unauthorized`.
+  - Active or inactive ordinary employees and inactive administrators receive `403 Forbidden`.
+- **Non-Superuser Employee Scope**:
+  - Superuser accounts (`is_superuser=True`) are never treated as calling employees: they are excluded from `/api/v1/reports/employees/` rows, `workload` employee counts, `employee_performance` exports, and cannot be passed as `employee_id` (`400 Bad Request`).
+
+### 6.2 `Asia/Kolkata` Date Window & Validation Rules
+
+- **Timezone**: All reporting date boundaries and daily trends are evaluated in `Asia/Kolkata` (`UTC+05:30`).
+- **Date Parameters**:
+  - `date_from` and `date_to` accept strict `YYYY-MM-DD` calendar dates only.
+  - When both `date_from` and `date_to` are omitted, the period defaults to the **last 30 local calendar days inclusive** (`today_kolkata - 29 days` through `today_kolkata`, configured via `REPORT_DEFAULT_DATE_RANGE_DAYS = 30`).
+  - When only one date (`date_from` or `date_to`) is supplied, that date is used for both boundaries (a single local calendar day).
+  - Half-open timestamp interval: `[00:00:00+05:30 on date_from, 00:00:00+05:30 on date_to + 1 day)`.
+  - Reversed date ranges (`date_from > date_to`) or windows exceeding `REPORT_MAX_DATE_RANGE_DAYS = 366` inclusive calendar days return `400 Bad Request`.
+- **Query Parameter Guardrails**:
+  - Unknown or repeated query parameters return `400 Bad Request`.
+  - `employee_id` must be a positive integer (`>= 1`) referencing an existing non-superuser `EMPLOYEE` (`role=EMPLOYEE` and `is_superuser=False`), or `400 Bad Request` is returned.
+
+### 6.3 Admin Dashboard Summary (`GET /api/v1/reports/dashboard/`)
+
+- **Supported Query Parameters**: `date_from`, `date_to`, `employee_id`.
+- **Metric Sections**:
+  - **`period`**: Resolved `timezone`, `date_from`, `date_to`, `start_at`, `end_exclusive_at`, and `employee_id`.
+  - **`leads`**:
+    - Organization-wide totals (`total_active`, `total_archived`, `assigned_active`, `unassigned_active`, `created_in_period`, `current_active_by_status`, `created_in_period_by_current_status`) always reflect the full organization, with all `Lead.Status` keys present (`0` when empty). Note: `Lead` does not store status-transition history, so `created_in_period_by_current_status` groups leads created in the period by their current `status`.
+    - When `employee_id` is supplied, `filtered_employee_leads` provides that employee's `assigned_active`, `assigned_archived`, `created_in_period_assigned_to_employee`, and `current_active_by_status`.
+  - **`calls`**:
+    - Calls with `started_at` in `[start_at, end_exclusive_at)` (scoped to `caller_id=employee_id` when supplied): `total_calls`, `unique_leads_called`, `total_duration_seconds`, `average_duration_seconds`, `by_outcome` (grouped by immutable `outcome_code_snapshot` and `outcome_label_snapshot`), and chronological `daily_trends` (grouped by `Asia/Kolkata` local date of `started_at`).
+  - **`follow_ups`**:
+    - Scoped to `owner_id=employee_id` when supplied: current snapshot (`pending_total`, `overdue` `< today 00:00+05:30`, `due_today` in `[today 00:00+05:30, tomorrow 00:00+05:30)`, `upcoming` `>= tomorrow 00:00+05:30`) and period activity (`created_in_period` by `created_at`, `completed_in_period` by `completed_at`, `cancelled_in_period` by `cancelled_at`).
+  - **`workload`**:
+    - Organization-wide non-superuser employee counts and inactive-owner alerts (`total_employees`, `active_employees`, `inactive_employees`, `inactive_employees_with_active_leads_count`, `inactive_employees_with_pending_followups_count`, `active_leads_with_inactive_owner_count`, `pending_followups_with_inactive_owner_count`, `assignments_changed_in_period` from `LeadAssignmentHistory.changed_at`), plus `filtered_employee_workload` when `employee_id` is supplied.
+- **Sample Response (`200 OK`)**:
+  ```json
+  {
+    "period": {
+      "timezone": "Asia/Kolkata",
+      "date_from": "2026-10-17",
+      "date_to": "2026-11-15",
+      "start_at": "2026-10-17T00:00:00+05:30",
+      "end_exclusive_at": "2026-11-16T00:00:00+05:30",
+      "employee_id": null
+    },
+    "leads": {
+      "total_active": 120,
+      "total_archived": 5,
+      "assigned_active": 105,
+      "unassigned_active": 15,
+      "created_in_period": 48,
+      "current_active_by_status": {
+        "NEW": 30,
+        "CONTACTED": 25,
+        "INTERESTED": 20,
+        "NOT_INTERESTED": 27,
+        "CONVERTED": 18
+      },
+      "created_in_period_by_current_status": {
+        "NEW": 20,
+        "CONTACTED": 10,
+        "INTERESTED": 8,
+        "NOT_INTERESTED": 7,
+        "CONVERTED": 3
+      },
+      "filtered_employee_leads": null
+    },
+    "calls": {
+      "total_calls": 85,
+      "unique_leads_called": 52,
+      "total_duration_seconds": 10200,
+      "average_duration_seconds": 120.0,
+      "by_outcome": [
+        {"outcome_code": "INTERESTED", "outcome_label": "Interested", "count": 32},
+        {"outcome_code": "NO_ANSWER", "outcome_label": "No Answer", "count": 53}
+      ],
+      "daily_trends": [
+        {
+          "date": "2026-11-14",
+          "total_calls": 40,
+          "unique_leads_called": 28,
+          "total_duration_seconds": 4800
+        }
+      ]
+    },
+    "follow_ups": {
+      "pending_total": 22,
+      "overdue": 4,
+      "due_today": 6,
+      "upcoming": 12,
+      "created_in_period": 30,
+      "completed_in_period": 19,
+      "cancelled_in_period": 3
+    },
+    "workload": {
+      "total_employees": 8,
+      "active_employees": 7,
+      "inactive_employees": 1,
+      "inactive_employees_with_active_leads_count": 1,
+      "inactive_employees_with_pending_followups_count": 1,
+      "active_leads_with_inactive_owner_count": 3,
+      "pending_followups_with_inactive_owner_count": 2,
+      "assignments_changed_in_period": 44,
+      "filtered_employee_workload": null
+    }
+  }
+  ```
+
+### 6.4 Employee Performance & Workload Report (`GET /api/v1/reports/employees/`)
+
+- **Supported Query Parameters**: `date_from`, `date_to`, `employee_id`, `is_active` (`true` or `false`), `page`, `page_size` (default `20`, max `100`).
+- **Ordering**: Deterministic `("-is_active", "username", "id")`.
+- **Metric Scopes** (documented in `period.metric_scopes`):
+  - **Current Workload Snapshot (`current_workload_fields`)**: `assigned_active_leads_count`, `converted_active_leads_count`, `pending_followups_count`, `overdue_followups_count`.
+  - **Period Performance (`period_performance_fields`)**: `calls_count`, `unique_leads_called_count`, `total_call_duration_seconds`, `average_call_duration_seconds`, `followups_completed_count`, `followups_cancelled_count`.
+- **Query Performance**: Uses correlated PostgreSQL `Subquery` annotations (2 SQL queries total: `COUNT(*)` + paginated `SELECT`), independent of employee count.
+
+### 6.5 Operational Report Export (`GET /api/v1/reports/export/`)
+
+- **Required Query Parameter**:
+  - `report_type`: `employee_performance`, `calls`, `leads`, or `followups`.
+- **Optional Format Parameter**:
+  - `export_format`: `csv` (default, `text/csv; charset=utf-8`) or `xlsx` (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`).
+- **Supported Filters by `report_type`** (unsupported cross-report filters return `400 Bad Request`):
+  - `employee_performance`: `date_from`, `date_to`, `employee_id`, `is_active`
+  - `calls`: `date_from`, `date_to`, `employee_id`, `lead_id`, `outcome_code`
+  - `leads`: `date_from`, `date_to` (filters `created_at` when supplied), `employee_id`, `status`, `archived` (`true`, `false` default, `all`), `unassigned` (`true` or `false`), `search`
+  - `followups`: `date_from`, `date_to` (filters `scheduled_at` when supplied), `employee_id`, `lead_id`, `status`, `due_state` (`today`, `overdue`, `upcoming`)
+- **Row Limit & Spreadsheet Security**:
+  - Enforces `REPORT_EXPORT_MAX_ROWS = 10000` before building the file. If matching rows exceed the limit, returns `400 Bad Request` with a clear message instead of silently truncating.
+  - **Formula-Injection Protection**: Any string cell starting with `=`, `+`, `-`, `@`, `\t`, or `\r` (including after leading spaces/newlines) is prefixed with `'` in both CSV and XLSX exports, while genuine numeric values (including negative numbers) remain unprefixed numeric cells.
+  - **Sensitive Field Exclusion**: Never exports password hashes, tokens, `Lead.internal_notes`, `FollowUpEvent.idempotency_key`, `FollowUpEvent.request_fingerprint`, or private employee `email` addresses.

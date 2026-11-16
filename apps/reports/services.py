@@ -96,9 +96,11 @@ def build_dashboard_summary(
     date_from: date | None = None,
     date_to: date | None = None,
     employee_id: int | None = None,
+    period: dict | None = None,
 ) -> dict:
     """Compute the complete Admin Dashboard Summary using bounded PostgreSQL queries."""
-    period = resolve_kolkata_period(date_from=date_from, date_to=date_to)
+    if period is None:
+        period = resolve_kolkata_period(date_from=date_from, date_to=date_to)
     start_dt = period["start_dt"]
     end_exclusive_dt = period["end_exclusive_dt"]
     today_midnight = period["today_midnight"]

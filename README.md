@@ -365,3 +365,94 @@ Independent Django + Django REST Framework + PostgreSQL backend for the **IQRA T
   - Enforces `REPORT_EXPORT_MAX_ROWS = 10000` before building the file. If matching rows exceed the limit, returns `400 Bad Request` with a clear message instead of silently truncating.
   - **Formula-Injection Protection**: Any string cell starting with `=`, `+`, `-`, `@`, `\t`, or `\r` (including after leading spaces/newlines) is prefixed with `'` in both CSV and XLSX exports, while genuine numeric values (including negative numbers) remain unprefixed numeric cells.
   - **Sensitive Field Exclusion**: Never exports password hashes, tokens, `Lead.internal_notes`, `FollowUpEvent.idempotency_key`, `FollowUpEvent.request_fingerprint`, or private employee `email` addresses.
+
+---
+
+## 7. Admin CRM Web Interface (`/crm/`) — Phase 4.2
+
+The responsive Django + Bootstrap 5 + HTMX Admin CRM web interface is served under `/crm/` (`apps/webcrm`) while preserving all `/api/v1/` endpoints for the Android employee calling app and `/admin/` for Django maintenance.
+
+### 7.1 Authentication, Rate Limiting & Authorization
+- **Session Login (`GET/POST /crm/login/`)**: Dedicated administrator sign-in page. Only active `ADMIN` users and active `superuser` accounts may sign in.
+- **PostgreSQL Shared Atomic Rate Limiting (`PostgresAtomicCache`)**:
+  - Enforces **5 failed attempts per 60 seconds** per normalized `(username, client_ip)` combination (`CRM_LOGIN_MAX_ATTEMPTS=5`, `CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS=60`) and an IP-wide threshold across all usernames (`CRM_LOGIN_MAX_IP_ATTEMPTS=5`), returning `429 Too Many Requests` when exceeded.
+  - Uses shared, worker-safe atomic storage via `CACHES["crm_ratelimit"]` (`apps.webcrm.rate_limit.PostgresAtomicCache` backed by the primary PostgreSQL database table `iqra_shared_cache` by default) so counters are shared atomically across multiple Gunicorn/Daphne workers without requiring Redis. Setting `CACHE_URL` configures `CACHES["default"]` (for DRF throttling) and never implicitly changes `CACHES["crm_ratelimit"]`.
+  - **Consistent PostgreSQL Database Clock**: All counter expirations and comparisons are evaluated directly in SQL against PostgreSQL's `STATEMENT_TIMESTAMP()`, avoiding Python clock drift or `time.time()` / `timezone.now()` mismatches across workers.
+  - **Atomic Pre-Authentication Admission & Counter Semantics**:
+    - Before password verification (`AdminWebLoginForm` / PBKDF2) runs, `LoginRateLimiter.admit_attempt()` updates both the `(client_ip, normalized_username)` counter (first) and the IP-wide `client_ip` counter (second) inside a **single PostgreSQL transaction** (`PostgresAtomicCache.run_in_transaction()`) using a consistent lock order (`user_ip_key` -> `ip_key`).
+    - **No database transaction, row lock, or cursor is held open while PBKDF2 executes.**
+    - **Rejected Admissions Retain No Increments**: If either counter would exceed its threshold (`> CRM_LOGIN_MAX_ATTEMPTS` or `> CRM_LOGIN_MAX_IP_ATTEMPTS`), the admission transaction marks itself for rollback (`transaction.set_rollback(True, using=db_alias)`), rolling back **both** updates so neither counter retains an increment from the rejected request, and returns `admitted=False` (HTTP `429 Too Many Requests`) before password verification runs.
+    - If either counter update raises a database error during admission, the enclosing transaction rolls back both updates and fails closed with HTTP `503 Service Unavailable`.
+    - **Failed Attempts & Abandoned Reservations**: For admitted requests (`admitted=True`), if password verification subsequently fails (or if a worker crashes mid-request), the committed `+1` admission reservation remains recorded and automatically expires at the end of the `CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS` window.
+    - **Selected Successful-Login Policy & Atomic Paired Reconciliation**: When credentials are verified valid, `LoginRateLimiter.reconcile_successful_attempt()` executes both window-bound atomic slot releases (`WHERE "cache_key" = %s AND "expires" = %s AND "expires" > STATEMENT_TIMESTAMP()`) inside a **single PostgreSQL transaction** using the same `(user_ip_key, ip_key)` lock order:
+      1. Legitimate successful sign-ins consume `0` net attempt budget.
+      2. A successful sign-in **never** erases prior or concurrent failed attempts on `(client_ip, normalized_username)` or on the IP-wide `client_ip` counter, and never decrements a subsequent window if the original window expired during PBKDF2.
+      3. Because rejected requests (`admitted=False`) roll back their increments at admission, a valid login admitted before a concurrent rejected request still succeeds when actual admitted failures have not saturated the threshold (`remaining_count < limit`).
+      4. If either slot release fails with a database error during reconciliation, the enclosing transaction rolls back both releases and `login_view` fails closed with `503 Service Unavailable` without establishing a session.
+      5. `LoginRateLimiter.clear_attempts()` deletes only the per-`(client_ip, normalized_username)` counter and preserves the IP-wide counter until it expires naturally.
+    - **Bounded Reservation Expiry Metadata**: `PostgresAtomicCache` pops per-key reservation expiry metadata immediately during `admit_attempt()` and caps its thread-local fallback `OrderedDict` at `MAX_TRACKED_EXPIRES_KEYS = 8` entries so long-lived worker threads never accumulate unbounded key metadata.
+  - **Bounded Expired-Row Cleanup**:
+    - Every committed atomic counter write opportunistically prunes at most `128` expired rows from `iqra_shared_cache` using an index scan on `iqra_shared_cache_expires_idx` (`ORDER BY "expires" ASC LIMIT 128 FOR UPDATE SKIP LOCKED`), preventing unbounded table growth without scanning the full table during login requests and without blocking concurrent workers.
+    - Under extreme sustained distributed brute-force traffic (where new distinct keys arrive faster than 128 per login attempt), operators may also invoke `caches["crm_ratelimit"].prune_expired(batch_size=1000)` periodically from a scheduled cron/management job.
+  - **Strict Backend Validation & Fail-Closed Behavior**:
+    - `LoginRateLimiter` rejects `LocMemCache`, `DummyCache`, Django's `RedisCache`, and any custom backend that does not explicitly declare `is_shared_backend = True` and provide a callable `atomic_increment` method.
+    - `CRM_LOGIN_MAX_ATTEMPTS >= 1`, `CRM_LOGIN_MAX_IP_ATTEMPTS >= 1`, `CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS >= 1`, `CRM_TRUSTED_PROXY_IPS` (valid IPv4/IPv6 addresses or CIDR networks), and the `CRM_SHARED_CACHE_TABLE` identifier allowlist (`[A-Za-z_][A-Za-z0-9_]{0,45}`) are validated at startup (`ImproperlyConfigured`) and at runtime.
+    - If the shared rate-limit backend is unreachable, misconfigured, or errors during `POST /crm/login/`, the view fails closed with `503 Service Unavailable` (`"Sign-in is temporarily unavailable. Please try again shortly."`) and logs only the exception class name without exposing credentials, usernames, or IP addresses.
+  - **Safe Concurrent Table Initialization & Trusted Reverse-Proxy Forwarding Headers**:
+    - `PostgresAtomicCache._ensure_table()` serializes DDL initialization across workers using a PostgreSQL transaction-scoped advisory lock (`pg_advisory_xact_lock`) and re-checks relation existence via `to_regclass` before executing `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`. Run `python manage.py migrate` prior to starting multi-worker processes so the table is provisioned during deployment.
+    - **Default Mode (`CRM_TRUST_X_FORWARDED_FOR=False`)**: `X-Forwarded-For` is ignored completely and `REMOTE_ADDR` is used.
+    - **Hardened Trusted-Proxy Mode (`CRM_TRUST_X_FORWARDED_FOR=True` + `CRM_TRUSTED_PROXY_IPS`)**:
+      - `X-Forwarded-For` is **never** trusted unless `CRM_TRUST_X_FORWARDED_FOR=True`, `CRM_TRUSTED_PROXY_IPS` is non-empty, **and** the immediate peer `REMOTE_ADDR` matches an explicitly configured proxy IP or CIDR in `CRM_TRUSTED_PROXY_IPS`.
+      - When `REMOTE_ADDR` is a trusted proxy, `resolve_client_ip()` walks `X-Forwarded-For` hops from **right to left** (matching standard reverse-proxy append order) and selects the rightmost valid non-trusted IP address, preventing clients from spoofing leftmost `X-Forwarded-For` values. If any inspected hop is empty or malformed, resolution fails safely back to `REMOTE_ADDR`.
+      - Example Nginx reverse-proxy and static-file configuration (when Nginx runs on `127.0.0.1` and forwards to Gunicorn/Daphne):
+        ```nginx
+        location /static/ {
+            alias /path/to/consultancy-crm/staticfiles/;
+            expires 30d;
+            add_header Cache-Control "public, no-transform";
+        }
+
+        location / {
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            client_max_body_size 6m;
+            proxy_pass http://127.0.0.1:8000;
+        }
+        ```
+        With matching environment configuration: `CRM_TRUST_X_FORWARDED_FOR=True` and `CRM_TRUSTED_PROXY_IPS=127.0.0.1`.
+        In production (`DEBUG=False`), run `python manage.py collectstatic --noinput` so Nginx serves `/static/` directly from `STATIC_ROOT` (`staticfiles/`). In local development (`DEBUG=True`), Django serves `/static/` via `staticfiles_urlpatterns()`.
+- **Session Logout (`POST /crm/logout/`)**: POST-only CSRF-protected logout endpoint (`GET` returns `405 Method Not Allowed`).
+- **Role Enforcement**: Active ordinary `EMPLOYEE` accounts and inactive accounts are rejected at `/crm/login/` and receive `403 Forbidden` on all `/crm/` views.
+
+### 7.3 Deployment & Environment Variables
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | `postgres://apple@localhost:5432/iqra_tcs_crm` | Primary PostgreSQL connection URL for IQRA TCS CRM. |
+| `CACHE_URL` | *(empty)* | Optional cache URL for `CACHES["default"]` (DRF API throttling). Never overrides `CACHES["crm_ratelimit"]`. |
+| `CRM_SHARED_CACHE_TABLE` | `iqra_shared_cache` | PostgreSQL table name used by `PostgresAtomicCache` (validated against `[A-Za-z_][A-Za-z0-9_]{0,45}`). |
+| `CRM_LOGIN_MAX_ATTEMPTS` | `5` | Maximum failed `/crm/login/` attempts per normalized `(username, client_ip)` within the window (`>= 1`). |
+| `CRM_LOGIN_MAX_IP_ATTEMPTS` | `5` | Maximum failed `/crm/login/` attempts per `client_ip` across all usernames within the window (`>= 1`). |
+| `CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window duration in seconds for `/crm/login/` (`>= 1`). |
+| `CRM_TRUST_X_FORWARDED_FOR` | `False` | Enable `X-Forwarded-For` evaluation only when `REMOTE_ADDR` is in `CRM_TRUSTED_PROXY_IPS`. |
+| `CRM_TRUSTED_PROXY_IPS` | *(empty)* | Comma-separated list of trusted reverse-proxy IPs or CIDRs (e.g. `127.0.0.1,10.0.0.2`). Required for `X-Forwarded-For` to be trusted. |
+
+### 7.2 Web CRM Routes
+- **Dashboard (`/crm/`)**: Live organization workload snapshot, period performance metrics (`Asia/Kolkata`), current lead status breakdown, call outcome snapshot distribution, daily call trend bars, and employee workload/performance overview (with HTMX partial updates).
+- **Lead Management (`/crm/leads/`)**:
+  - `GET /crm/leads/` — Search, filter (`status`, `assigned_to`, `unassigned`, `archived`), paginate, and atomic bulk-assign leads.
+  - `GET/POST /crm/leads/create/` & `GET/POST /crm/leads/<id>/edit/` — Create and update leads via `AdminLeadSerializer` (lead edits modify non-assignment fields only; assignment changes are performed exclusively via `/crm/leads/<id>/assign/`).
+  - `GET /crm/leads/<id>/` — Lead detail, manual assignment (`POST /crm/leads/<id>/assign/`), archive/unarchive (`POST /crm/leads/<id>/archive/`), assignment audit history, call history, and follow-ups.
+  - `GET /crm/leads/import/`, `POST /crm/leads/import/preview/`, `POST /crm/leads/import/commit/`, `POST /crm/leads/import/<id>/cancel/` — Staged CSV/XLSX import preview (guarded by `LeadImportUploadLimitMiddleware` at `LEAD_IMPORT_MAX_REQUEST_SIZE = 6 MB`; production reverse proxies such as Nginx should also configure `client_max_body_size 6m;`), explicit confirmation checkbox (`confirm_commit="yes"`), commit, and cancellation.
+- **Employee Management (`/crm/employees/`)**:
+  - `GET /crm/employees/`, `GET/POST /crm/employees/create/`, `GET /crm/employees/<id>/` — List, create, and inspect non-superuser calling employees (superusers are excluded and return `404`).
+  - `POST /crm/employees/<id>/edit/`, `POST /crm/employees/<id>/toggle-active/`, `POST /crm/employees/<id>/reset-password/` — Update employee profile, activate/deactivate (revoking active JWT refresh tokens on deactivation), and reset password (revoking active JWT refresh tokens).
+- **Calls & Outcomes (`/crm/calls/`, `/crm/call-outcomes/`)**:
+  - `GET /crm/calls/` & `GET /crm/calls/<id>/` — Strictly read-only call audit log rendering immutable caller and outcome snapshots.
+  - `GET/POST /crm/call-outcomes/` & `POST /crm/call-outcomes/<id>/update/` — Create and update call outcome catalog entries (enforcing immutable `code`).
+- **Follow-ups (`/crm/follow-ups/`)**:
+  - `GET /crm/follow-ups/` & `GET /crm/follow-ups/<id>/` — Filter follow-ups (`overdue`, `today`, `upcoming`, `COMPLETED`, `CANCELLED`), inspect `FollowUpEvent` audit history, and cancel pending follow-ups for inactive employees with a mandatory nonblank reason (`POST /crm/follow-ups/<id>/cancel/`).
+- **Reports & Exports (`/crm/reports/`, `/crm/reports/export/`)**:
+  - Interactive reporting center and CSV/XLSX download launcher backed by `apps.reports`.

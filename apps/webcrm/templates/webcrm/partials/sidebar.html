@@ -1,0 +1,155 @@
+{% with current_url=request.resolver_match.url_name %}
+<aside id="crm-sidebar" class="crm-sidebar" aria-label="Primary CRM navigation">
+  <!-- Brand Header -->
+  <div class="crm-brand">
+    <a href="{% url 'webcrm:dashboard' %}" class="crm-brand-link" title="IQRA TCS Calling CRM">
+      <span class="crm-brand-mark">IQ</span>
+      <span class="crm-brand-copy">
+        <span class="crm-brand-title">IQRA TCS CRM</span>
+        <span class="crm-brand-sub">Calling &amp; Admissions</span>
+      </span>
+    </a>
+  </div>
+
+  <!-- Grouped Navigation -->
+  <nav class="crm-nav-scroll">
+    <!-- 1. Overview -->
+    <div class="crm-nav-group">
+      <div class="crm-nav-group-label">Overview</div>
+      <ul class="crm-nav">
+        <li class="crm-nav-item">
+          <a href="{% url 'webcrm:dashboard' %}"
+             class="crm-nav-link {% if active_nav == 'dashboard' %}active{% endif %}"
+             title="Dashboard">
+            <span class="crm-nav-icon">{% include "webcrm/partials/icon.html" with name="layout-dashboard" %}</span>
+            <span class="crm-nav-label">Dashboard</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 2. Lead Management -->
+    <div class="crm-nav-group">
+      <div class="crm-nav-group-label">Lead Management</div>
+      <ul class="crm-nav">
+        <li class="crm-nav-item">
+          <a href="{% url 'webcrm:lead-list' %}"
+             class="crm-nav-link {% if current_url == 'lead-list' or current_url == 'lead-detail' or current_url == 'lead-edit' or current_url == 'lead-assign' or current_url == 'lead-archive-toggle' %}active{% endif %}"
+             title="All Leads">
+            <span class="crm-nav-icon">{% include "webcrm/partials/icon.html" with name="users" %}</span>
+            <span class="crm-nav-label">All Leads</span>
+          </a>
+        </li>
+        <li class="crm-nav-item">
+          <a href="{% url 'webcrm:lead-create' %}"
+             class="crm-nav-link {% if current_url == 'lead-create' %}active{% endif %}"
+             title="Add Lead">
+            <span class="crm-nav-icon">{% include "webcrm/partials/icon.html" with name="user-plus" %}</span>
+            <span class="crm-nav-label">Add Lead</span>
+          </a>
+        </li>
+        <li class="crm-nav-item">
+          <a href="{% url 'webcrm:lead-import' %}"
+             class="crm-nav-link {% if current_url == 'lead-import' or current_url == 'lead-import-preview' or current_url == 'lead-import-commit' or current_url == 'lead-import-cancel' %}active{% endif %}"
+             title="Import Leads">
+            <span class="crm-nav-icon">{% include "webcrm/partials/icon.html" with name="upload" %}</span>
+            <span class="crm-nav-label">Import Leads</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 3. Calling -->
+    <div class="crm-nav-group">
+      <div class="crm-nav-group-label">Calling</div>
+      <ul class="crm-nav">
+        <li class="crm-nav-item">
+          <a href="{% url 'webcrm:call-list' %}"
+             class="crm-nav-link {% if active_nav == 'calls' %}active{% endif %}"
+             title="Call History">
+            <span class="crm-nav-icon">{% include "webcrm/partials/icon.html" with name="phone-call" %}</span>
+            <span class="crm-nav-label">Call History</span>
+          </a>
+        </li>
+        <li class="crm-nav-item">
+          <a href="{% url 'webcrm:call-outcome-list' %}"
+             class="crm-nav-link {% if active_nav == 'outcomes' %}active{% endif %}"
+             title="Call Outcomes">
+            <span class="crm-nav-icon">{% include "webcrm/partials/icon.html" with name="sliders" %}</span>
+            <span class="crm-nav-label">Call Outcomes</span>
+          </a>
+        </li>
+        <li class="crm-nav-item">
+          <a href="{% url 'webcrm:followup-list' %}"
+             class="crm-nav-link {% if active_nav == 'followups' %}active{% endif %}"
+             title="Follow-ups">
+            <span class="crm-nav-icon">{% include "webcrm/partials/icon.html" with name="calendar-clock" %}</span>
+            <span class="crm-nav-label">Follow-ups</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 4. Team -->
+    <div class="crm-nav-group">
+      <div class="crm-nav-group-label">Team</div>
+      <ul class="crm-nav">
+        <li class="crm-nav-item">
+          <a href="{% url 'webcrm:employee-list' %}"
+             class="crm-nav-link {% if active_nav == 'employees' %}active{% endif %}"
+             title="Employees">
+            <span class="crm-nav-icon">{% include "webcrm/partials/icon.html" with name="user-check" %}</span>
+            <span class="crm-nav-label">Employees</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 5. Analytics -->
+    <div class="crm-nav-group">
+      <div class="crm-nav-group-label">Analytics</div>
+      <ul class="crm-nav">
+        <li class="crm-nav-item">
+          <a href="{% url 'webcrm:reports-hub' %}"
+             class="crm-nav-link {% if active_nav == 'reports' %}active{% endif %}"
+             title="Reports">
+            <span class="crm-nav-icon">{% include "webcrm/partials/icon.html" with name="bar-chart-3" %}</span>
+            <span class="crm-nav-label">Reports</span>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- User Profile & Session Footer -->
+  <div class="crm-sidebar-footer">
+    {% if request.user.is_authenticated %}
+      <div class="crm-user-card">
+        <span class="crm-user-avatar" aria-hidden="true">
+          {{ request.user.username|slice:":2"|upper }}
+        </span>
+        <div class="crm-user-meta">
+          <div class="crm-user-name">
+            <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+          </div>
+          <div class="crm-user-role">
+            @{{ request.user.username }} &middot;
+            {% if request.user.is_superuser %}SUPERUSER{% else %}{{ request.user.role }}{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="crm-sidebar-actions">
+        <span class="crm-sidebar-domain">iqracentral.com &middot; IST</span>
+        <form method="post" action="{% url 'webcrm:logout' %}" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="crm-logout-btn" title="Sign out of CRM">
+            {% include "webcrm/partials/icon.html" with name="log-out" size="14" %}
+            <span class="crm-logout-label">Sign out</span>
+          </button>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+</aside>
+<div id="crm-sidebar-backdrop" class="crm-sidebar-backdrop" aria-hidden="true"></div>
+{% endwith %}

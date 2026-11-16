@@ -1,0 +1,158 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Call History — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Call History{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <h1 class="crm-page-title">Call history</h1>
+    <div class="crm-page-subtitle">
+      Organization-wide immutable call audit log with preserved historical caller and outcome snapshots
+    </div>
+  </div>
+  <div class="crm-page-actions">
+    <a href="{% url 'webcrm:call-outcome-list' %}" class="btn btn-outline-secondary">
+      {% include "webcrm/partials/icon.html" with name="sliders" size="16" %}
+      <span>Configure call outcomes</span>
+    </a>
+  </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" action="{% url 'webcrm:call-list' %}" class="row align-items-end">
+      <div class="col-md-3">
+        <label for="call-search" class="form-label">Search</label>
+        <input type="text" id="call-search" name="search" class="form-control"
+               placeholder="Lead, phone, caller, notes" value="{{ filters.search }}">
+      </div>
+      <div class="col-md-3">
+        <label for="call-emp" class="form-label">Employee</label>
+        <select id="call-emp" name="employee_id" class="form-select">
+          <option value="">All employees</option>
+          {% for emp in employees %}
+            <option value="{{ emp.id }}" {% if filters.employee_id == emp.id %}selected{% endif %}>
+              {{ emp.username }} ({{ emp.get_full_name|default:emp.username }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="call-outcome" class="form-label">Outcome snapshot</label>
+        <select id="call-outcome" name="outcome_code" class="form-select">
+          <option value="">All outcomes</option>
+          {% for outcome in outcomes %}
+            <option value="{{ outcome.code }}" {% if filters.outcome_code == outcome.code %}selected{% endif %}>
+              {{ outcome.code }} — {{ outcome.label }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="call-from" class="form-label">Date from (IST)</label>
+        <input type="date" id="call-from" name="date_from" class="form-control" value="{{ filters.date_from }}">
+      </div>
+      <div class="col-md-2">
+        <label for="call-to" class="form-label">Date to (IST)</label>
+        <input type="date" id="call-to" name="date_to" class="form-control" value="{{ filters.date_to }}">
+      </div>
+      <div class="col-12 mt-2 d-flex justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          {% include "webcrm/partials/icon.html" with name="filter" size="14" %}
+          <span>Filter calls</span>
+        </button>
+        <a href="{% url 'webcrm:call-list' %}" class="btn btn-outline-secondary btn-sm">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Call Audit Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-title">
+      <span>Logged calls</span>
+      <span class="crm-mono-tag">{{ page_obj.paginator.count }} total</span>
+    </div>
+    <span class="card-header-sub">Read-only immutable ledger</span>
+  </div>
+  <div class="card-body-flush">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Started at (IST)</th>
+            <th>Student lead</th>
+            <th>Caller snapshot</th>
+            <th>Outcome snapshot</th>
+            <th class="text-end">Duration</th>
+            <th>Employee notes</th>
+            <th class="text-end">Record</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for call in page_obj.object_list %}
+            <tr>
+              <td class="font-monospace text-muted">{{ call.started_at|date:"Y-m-d H:i:s" }}</td>
+              <td>
+                <a href="{% url 'webcrm:lead-detail' call.lead.id %}" class="fw-medium">{{ call.lead.name }}</a>
+                <div class="font-monospace text-muted">{{ call.lead.phone }}</div>
+              </td>
+              <td>
+                <div class="fw-medium">{{ call.caller_username_snapshot }}</div>
+                <div class="small text-muted">{{ call.caller_name_snapshot }}</div>
+              </td>
+              <td>
+                <span class="badge bg-info"><span class="badge-dot"></span>{{ call.outcome_label_snapshot }}</span>
+                <div class="font-monospace text-muted mt-1">{{ call.outcome_code_snapshot }}</div>
+              </td>
+              <td class="text-end font-monospace">{{ call.duration_seconds }}s</td>
+              <td class="small text-secondary">{{ call.employee_notes|truncatechars:64|default:"—" }}</td>
+              <td class="text-end">
+                <a href="{% url 'webcrm:call-detail' call.id %}" class="btn btn-sm btn-outline-secondary">Inspect</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7">
+                {% include "webcrm/partials/empty_state.html" with icon="phone-call" title="No calls match the selected filters" description="Try adjusting the employee, outcome, or date range filters." %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <div class="crm-pagination-bar">
+      <span class="small text-muted tabular-nums">
+        Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} calls
+      </span>
+      <ul class="pagination">
+        {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&amp;search={{ filters.search|urlencode }}&amp;employee_id={{ filters.employee_id|default:'' }}&amp;outcome_code={{ filters.outcome_code|urlencode }}&amp;date_from={{ filters.date_from|urlencode }}&amp;date_to={{ filters.date_to|urlencode }}">
+              {% include "webcrm/partials/icon.html" with name="chevron-left" size="14" %}
+              <span>Previous</span>
+            </a>
+          </li>
+        {% endif %}
+        <li class="page-item active">
+          <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        </li>
+        {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}&amp;search={{ filters.search|urlencode }}&amp;employee_id={{ filters.employee_id|default:'' }}&amp;outcome_code={{ filters.outcome_code|urlencode }}&amp;date_from={{ filters.date_from|urlencode }}&amp;date_to={{ filters.date_to|urlencode }}">
+              <span>Next</span>
+              {% include "webcrm/partials/icon.html" with name="chevron-right" size="14" %}
+            </a>
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

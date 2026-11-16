@@ -1,6 +1,8 @@
 """IQRA TCS Calling CRM — Root URL Configuration."""
 
+from django.conf import settings
 from django.contrib import admin
+from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include, path
 
 admin.site.site_header = "IQRA TCS Admin"
@@ -28,4 +30,10 @@ urlpatterns = [
 
     # Admin dashboard & reporting — Phase 4.1
     path("api/v1/reports/", include("apps.reports.api.urls")),
+
+    # Admin CRM Web Interface — Phase 4.2
+    path("crm/", include(("apps.webcrm.urls", "webcrm"), namespace="webcrm")),
 ]
+
+if settings.DEBUG:
+    urlpatterns += staticfiles_urlpatterns()

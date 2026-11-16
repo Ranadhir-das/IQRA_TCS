@@ -1,0 +1,91 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Create Employee — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Add Employee{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <div class="mb-2">
+      <a href="{% url 'webcrm:employee-list' %}" class="btn btn-sm btn-outline-secondary">
+        {% include "webcrm/partials/icon.html" with name="arrow-left" size="14" %}
+        <span>All employees</span>
+      </a>
+    </div>
+    <h1 class="crm-page-title">Add calling employee</h1>
+    <div class="crm-page-subtitle">
+      Provision a new caller account (EMPLOYEE role) for the IQRA TCS Android calling app
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-title">Employee account credentials &amp; profile</div>
+    <span class="crm-mono-tag">Role: EMPLOYEE</span>
+  </div>
+  <div class="card-body">
+    {% if errors %}
+      <div class="alert alert-danger">
+        {% include "webcrm/partials/icon.html" with name="alert-triangle" %}
+        <div>{{ errors }}</div>
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'webcrm:employee-create' %}" novalidate>
+      {% csrf_token %}
+      <div class="row">
+        <div class="col-md-4 mb-3">
+          <label for="id_username" class="form-label">Username *</label>
+          <input type="text" id="id_username" name="username" class="form-control"
+                 placeholder="e.g. caller.riya" value="{{ form_data.username|default:'' }}" required>
+        </div>
+        <div class="col-md-4 mb-3">
+          <label for="id_first_name" class="form-label">First name</label>
+          <input type="text" id="id_first_name" name="first_name" class="form-control"
+                 value="{{ form_data.first_name|default:'' }}">
+        </div>
+        <div class="col-md-4 mb-3">
+          <label for="id_last_name" class="form-label">Last name</label>
+          <input type="text" id="id_last_name" name="last_name" class="form-control"
+                 value="{{ form_data.last_name|default:'' }}">
+        </div>
+        <div class="col-md-4 mb-3">
+          <label for="id_email" class="form-label">Email address</label>
+          <input type="email" id="id_email" name="email" class="form-control"
+                 placeholder="name@iqracentral.com" value="{{ form_data.email|default:'' }}">
+        </div>
+        <div class="col-md-4 mb-3">
+          <label for="id_phone" class="form-label">Phone number</label>
+          <input type="text" id="id_phone" name="phone" class="form-control font-monospace"
+                 placeholder="+91..." value="{{ form_data.phone|default:'' }}">
+        </div>
+        <div class="col-md-4 mb-3">
+          <label for="id_designation" class="form-label">Designation</label>
+          <input type="text" id="id_designation" name="designation" class="form-control"
+                 placeholder="Admissions Counselor" value="{{ form_data.designation|default:'' }}">
+        </div>
+        <div class="col-md-6 mb-3">
+          <label for="id_password" class="form-label">Initial password *</label>
+          <div class="crm-input-with-action">
+            <input type="password" id="id_password" name="password" class="form-control" autocomplete="new-password" required>
+            <button type="button"
+                    class="crm-input-toggle-btn"
+                    data-toggle-password="id_password"
+                    aria-label="Show password"
+                    title="Show password">
+              {% include "webcrm/partials/icon.html" with name="eye" size="16" %}
+            </button>
+          </div>
+          <div class="form-hint">Minimum 8 characters; validated against Django password security rules.</div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-2 pt-3" style="border-top: 1px solid var(--crm-border);">
+        <button type="submit" class="btn btn-primary">Create employee</button>
+        <a href="{% url 'webcrm:employee-list' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,183 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Follow-up #{{ followup.id }} — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Follow-up Detail{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <a href="{% url 'webcrm:followup-list' %}" class="btn btn-sm btn-outline-secondary">
+        {% include "webcrm/partials/icon.html" with name="arrow-left" size="14" %}
+        <span>Follow-ups</span>
+      </a>
+      <span class="crm-mono-tag">Follow-up #{{ followup.id }}</span>
+      {% if followup.status == 'COMPLETED' %}
+        <span class="badge bg-success"><span class="badge-dot"></span>{{ followup.status }}</span>
+      {% elif followup.status == 'CANCELLED' %}
+        <span class="badge bg-secondary"><span class="badge-dot"></span>{{ followup.status }}</span>
+      {% else %}
+        <span class="badge bg-primary"><span class="badge-dot"></span>{{ followup.status }}</span>
+      {% endif %}
+    </div>
+    <h1 class="crm-page-title mt-2">Callback for {{ followup.lead.name }}</h1>
+    <div class="crm-page-subtitle font-monospace">
+      Scheduled {{ followup.scheduled_at|date:"Y-m-d H:i:s" }} IST &middot; Owner @{{ followup.owner.username }}
+    </div>
+  </div>
+</div>
+
+<div class="row mb-4">
+  <!-- Follow-up Summary Card -->
+  <div class="col-lg-7">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">Follow-up details</div>
+        <span class="card-header-sub font-monospace">#{{ followup.id }}</span>
+      </div>
+      <div class="card-body">
+        <div class="crm-dossier-grid">
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Student lead</span>
+            <span class="crm-dossier-value">
+              <a href="{% url 'webcrm:lead-detail' followup.lead.id %}">{{ followup.lead.name }}</a>
+              <span class="font-monospace text-muted">({{ followup.lead.phone }})</span>
+            </span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Owner employee</span>
+            <span class="crm-dossier-value">
+              <a href="{% url 'webcrm:employee-detail' followup.owner.id %}">{{ followup.owner.username }}</a>
+              <span class="small text-muted">({{ followup.owner.get_full_name|default:followup.owner.username }})</span>
+              {% if followup.owner.is_active %}
+                <span class="badge bg-success">Active</span>
+              {% else %}
+                <span class="badge bg-secondary">Inactive</span>
+              {% endif %}
+            </span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Scheduled at (IST)</span>
+            <span class="crm-dossier-value font-monospace">{{ followup.scheduled_at|date:"Y-m-d H:i:s" }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Linked call record</span>
+            <span class="crm-dossier-value">
+              {% if followup.call %}
+                <a href="{% url 'webcrm:call-detail' followup.call.id %}" class="font-monospace">Call #{{ followup.call.id }}</a>
+              {% else %}
+                <span class="text-muted">None</span>
+              {% endif %}
+            </span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Completed at</span>
+            <span class="crm-dossier-value font-monospace">{{ followup.completed_at|date:"Y-m-d H:i:s"|default:"—" }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Cancelled at</span>
+            <span class="crm-dossier-value font-monospace">{{ followup.cancelled_at|date:"Y-m-d H:i:s"|default:"—" }}</span>
+          </div>
+          <div class="crm-dossier-item full-span" style="border-bottom: none; padding-bottom: 0;">
+            <span class="crm-dossier-label">Follow-up notes</span>
+            <span class="crm-dossier-value fw-normal text-secondary">{{ followup.notes|default:"—" }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Cancellation Control (Inactive Employee Policy) -->
+  <div class="col-lg-5">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">Administrative cancellation</div>
+        <span class="card-header-sub">Inactive-owner policy</span>
+      </div>
+      <div class="card-body">
+        <p class="small text-secondary">
+          Administrators cannot create, reschedule, complete, or transfer employee follow-ups. Administrators may cancel a pending follow-up <strong>only when its owning employee is inactive</strong> and must record a nonblank audit reason.
+        </p>
+
+        {% if cancel_error %}
+          <div class="alert alert-danger">
+            {% include "webcrm/partials/icon.html" with name="alert-triangle" %}
+            <div>{{ cancel_error }}</div>
+          </div>
+        {% endif %}
+
+        {% if can_admin_cancel %}
+          <form method="post" action="{% url 'webcrm:followup-cancel' followup.id %}">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="id_cancel_reason" class="form-label">Mandatory cancellation reason *</label>
+              <textarea id="id_cancel_reason" name="reason" rows="3" class="form-control"
+                        placeholder="State why this inactive employee's pending follow-up is being cancelled" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-danger btn-sm"
+                    data-confirm="Cancel this pending follow-up for inactive employee '{{ followup.owner.username }}'?">
+              <span>Cancel follow-up</span>
+            </button>
+          </form>
+        {% else %}
+          <div class="alert alert-info mb-0 small">
+            {% include "webcrm/partials/icon.html" with name="info" %}
+            <div>
+              {% if followup.status != 'PENDING' %}
+                This follow-up is already <strong>{{ followup.status }}</strong> and cannot be modified.
+              {% else %}
+                Owner <strong>{{ followup.owner.username }}</strong> is currently active. Only the owning employee may cancel or complete their active pending follow-up.
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chronological FollowUpEvent Audit History -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-title">
+      <span>Follow-up lifecycle event history</span>
+      <span class="crm-mono-tag">{{ events|length }}</span>
+    </div>
+    <span class="card-header-sub">Immutable audit trail</span>
+  </div>
+  <div class="card-body-flush">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Timestamp (IST)</th>
+            <th>Event type</th>
+            <th>Actor</th>
+            <th>Previous schedule</th>
+            <th>New schedule</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ev in events %}
+            <tr>
+              <td class="font-monospace text-muted">{{ ev.created_at|date:"Y-m-d H:i:s" }}</td>
+              <td><span class="badge bg-secondary">{{ ev.event_type }}</span></td>
+              <td class="fw-medium">{{ ev.actor.username }} <span class="small text-muted">({{ ev.actor.role }})</span></td>
+              <td class="font-monospace text-muted">{{ ev.previous_scheduled_at|date:"Y-m-d H:i:s"|default:"—" }}</td>
+              <td class="font-monospace">{{ ev.new_scheduled_at|date:"Y-m-d H:i:s"|default:"—" }}</td>
+              <td class="small text-secondary">{{ ev.reason|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6">
+                {% include "webcrm/partials/empty_state.html" with icon="history" title="No lifecycle events recorded" %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

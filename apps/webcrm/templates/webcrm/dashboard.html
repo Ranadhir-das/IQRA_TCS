@@ -1,0 +1,78 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Dashboard — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Page Header & Quick Actions -->
+<div class="crm-page-header">
+  <div>
+    <h1 class="crm-page-title">Operations overview</h1>
+    <div class="crm-page-subtitle">
+      Student enquiry intake, calling activity, and follow-up compliance for {{ summary.period.date_from }} to {{ summary.period.date_to }} ({{ summary.period.timezone }})
+    </div>
+  </div>
+  <div class="crm-page-actions">
+    <a href="{% url 'webcrm:lead-import' %}" class="btn btn-outline-secondary">
+      {% include "webcrm/partials/icon.html" with name="upload" size="16" %}
+      <span>Import leads</span>
+    </a>
+    <a href="{% url 'webcrm:reports-hub' %}" class="btn btn-outline-secondary">
+      {% include "webcrm/partials/icon.html" with name="bar-chart-3" size="16" %}
+      <span>Reports &amp; exports</span>
+    </a>
+    <a href="{% url 'webcrm:lead-create' %}" class="btn btn-primary">
+      {% include "webcrm/partials/icon.html" with name="plus" size="16" %}
+      <span>Add lead</span>
+    </a>
+  </div>
+</div>
+
+<!-- Reporting Period & Employee Filter Bar -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" action="{% url 'webcrm:dashboard' %}"
+          hx-get="{% url 'webcrm:dashboard' %}"
+          hx-target="#dashboard-content"
+          hx-push-url="true"
+          class="row align-items-end">
+      <div class="col-md-3">
+        <label for="filter-date-from" class="form-label">Period start (IST)</label>
+        <input type="date" id="filter-date-from" name="date_from" class="form-control" value="{{ selected_date_from }}">
+      </div>
+      <div class="col-md-3">
+        <label for="filter-date-to" class="form-label">Period end (IST)</label>
+        <input type="date" id="filter-date-to" name="date_to" class="form-control" value="{{ selected_date_to }}">
+      </div>
+      <div class="col-md-4">
+        <label for="filter-employee" class="form-label">Employee scope</label>
+        <select id="filter-employee" name="employee_id" class="form-select">
+          <option value="">All employees (organization-wide)</option>
+          {% for emp in employees %}
+            <option value="{{ emp.id }}" {% if selected_employee_id == emp.id %}selected{% endif %}>
+              {{ emp.username }} — {{ emp.get_full_name|default:emp.username }}{% if not emp.is_active %} (Inactive){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">Apply</button>
+          <a href="{% url 'webcrm:dashboard' %}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if filter_errors %}
+  <div class="alert alert-danger">
+    {% include "webcrm/partials/icon.html" with name="alert-triangle" %}
+    <div>{{ filter_errors }}</div>
+  </div>
+{% endif %}
+
+<div id="dashboard-content">
+  {% include "webcrm/partials/dashboard_content.html" %}
+</div>
+{% endblock %}

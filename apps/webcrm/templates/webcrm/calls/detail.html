@@ -1,0 +1,127 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Call #{{ call.id }} — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Call Detail{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <a href="{% url 'webcrm:call-list' %}" class="btn btn-sm btn-outline-secondary">
+        {% include "webcrm/partials/icon.html" with name="arrow-left" size="14" %}
+        <span>Call history</span>
+      </a>
+      <span class="crm-mono-tag">Call #{{ call.id }}</span>
+      <span class="badge bg-info"><span class="badge-dot"></span>{{ call.outcome_label_snapshot }}</span>
+    </div>
+    <h1 class="crm-page-title mt-2">Call record for {{ call.lead.name }}</h1>
+    <div class="crm-page-subtitle font-monospace">
+      {{ call.started_at|date:"Y-m-d H:i:s" }} IST &middot; Duration {{ call.duration_seconds }}s &middot; Logged by {{ call.caller_username_snapshot }}
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-title">Immutable call audit snapshot</div>
+        <span class="badge bg-secondary">Read-only</span>
+      </div>
+      <div class="card-body">
+        <div class="crm-dossier-grid">
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Student lead</span>
+            <span class="crm-dossier-value">
+              <a href="{% url 'webcrm:lead-detail' call.lead.id %}">{{ call.lead.name }}</a>
+              <span class="font-monospace text-muted">({{ call.lead.phone }})</span>
+            </span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Duration</span>
+            <span class="crm-dossier-value font-monospace">{{ call.duration_seconds }} seconds</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Caller username snapshot</span>
+            <span class="crm-dossier-value font-monospace">{{ call.caller_username_snapshot }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Caller name snapshot</span>
+            <span class="crm-dossier-value">{{ call.caller_name_snapshot }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Outcome code snapshot</span>
+            <span class="crm-dossier-value font-monospace">{{ call.outcome_code_snapshot }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Outcome label snapshot</span>
+            <span class="crm-dossier-value">
+              <span class="badge bg-info"><span class="badge-dot"></span>{{ call.outcome_label_snapshot }}</span>
+            </span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Started at (IST)</span>
+            <span class="crm-dossier-value font-monospace">{{ call.started_at|date:"Y-m-d H:i:s" }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Ended at (IST)</span>
+            <span class="crm-dossier-value font-monospace">{{ call.ended_at|date:"Y-m-d H:i:s" }}</span>
+          </div>
+          <div class="crm-dossier-item full-span">
+            <span class="crm-dossier-label">Employee call notes</span>
+            <span class="crm-dossier-value fw-normal text-secondary">{{ call.employee_notes|default:"—" }}</span>
+          </div>
+          <div class="crm-dossier-item full-span" style="border-bottom: none; padding-bottom: 0;">
+            <span class="crm-dossier-label">Submitted at (IST)</span>
+            <span class="crm-dossier-value small text-muted font-monospace">{{ call.created_at|date:"Y-m-d H:i:s" }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Linked Follow-ups -->
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-title">
+          <span>Follow-ups linked to this call</span>
+          <span class="crm-mono-tag">{{ follow_ups|length }}</span>
+        </div>
+      </div>
+      <div class="card-body-flush">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Scheduled</th>
+                <th>Owner</th>
+                <th>Status</th>
+                <th class="text-end">Record</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for fu in follow_ups %}
+                <tr>
+                  <td class="font-monospace">{{ fu.scheduled_at|date:"Y-m-d H:i" }}</td>
+                  <td class="fw-medium">{{ fu.owner.username }}</td>
+                  <td><span class="badge bg-secondary">{{ fu.status }}</span></td>
+                  <td class="text-end">
+                    <a href="{% url 'webcrm:followup-detail' fu.id %}" class="btn btn-sm btn-outline-secondary">View</a>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4">
+                    {% include "webcrm/partials/empty_state.html" with icon="calendar-clock" title="No follow-ups linked to this call" %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

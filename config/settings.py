@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.calls",
     "apps.followups",
     "apps.reports",
+    "apps.webcrm",
 ]
 
 MIDDLEWARE = [
@@ -94,6 +95,47 @@ DATABASES = {
     )
 }
 
+# ─── Cache & Shared CRM Rate-Limit Storage ────────────────────────────────────
+# DRF API throttling uses CACHES["default"].
+# Admin Web CRM login rate limiting (/crm/login/) uses CACHES["crm_ratelimit"],
+# which always defaults to the shared PostgreSQL-backed atomic cache
+# (PostgresAtomicCache) and never implicitly inherits CACHE_URL.
+CACHE_URL = env.str("CACHE_URL", default="").strip()
+CRM_SHARED_CACHE_TABLE = env.str(
+    "CRM_SHARED_CACHE_TABLE", default="iqra_shared_cache"
+).strip()
+
+
+def build_caches_setting(
+    *,
+    cache_url: str = "",
+    crm_shared_cache_table: str = "iqra_shared_cache",
+) -> dict:
+    """Build CACHES setting while keeping crm_ratelimit isolated from CACHE_URL."""
+    cleaned_cache_url = (cache_url or "").strip()
+    if cleaned_cache_url:
+        default_cache = env.cache_url_config(cleaned_cache_url)
+    else:
+        default_cache = {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "iqra-default-locmem",
+        }
+    return {
+        "default": default_cache,
+        "crm_ratelimit": {
+            "BACKEND": "apps.webcrm.rate_limit.PostgresAtomicCache",
+            "LOCATION": crm_shared_cache_table,
+            "TIMEOUT": 300,
+        },
+    }
+
+
+CACHES = build_caches_setting(
+    cache_url=CACHE_URL,
+    crm_shared_cache_table=CRM_SHARED_CACHE_TABLE,
+)
+CRM_LOGIN_RATELIMIT_CACHE_ALIAS = "crm_ratelimit"
+
 # ─── Custom User Model ────────────────────────────────────────────────────────
 AUTH_USER_MODEL = "accounts.User"
 
@@ -115,6 +157,37 @@ USE_TZ = True
 # ─── Static Files ─────────────────────────────────────────────────────────────
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# ─── Admin Web CRM Session Login Settings ─────────────────────────────────────
+LOGIN_URL = "/crm/login/"
+LOGIN_REDIRECT_URL = "/crm/"
+LOGOUT_REDIRECT_URL = "/crm/login/"
+CRM_LOGIN_MAX_ATTEMPTS = env.int("CRM_LOGIN_MAX_ATTEMPTS", default=5)
+CRM_LOGIN_MAX_IP_ATTEMPTS = env.int(
+    "CRM_LOGIN_MAX_IP_ATTEMPTS", default=CRM_LOGIN_MAX_ATTEMPTS
+)
+CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS = env.int(
+    "CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS", default=60
+)
+CRM_TRUST_X_FORWARDED_FOR = env.bool("CRM_TRUST_X_FORWARDED_FOR", default=False)
+CRM_TRUSTED_PROXY_IPS = tuple(
+    ip.strip()
+    for ip in env.list("CRM_TRUSTED_PROXY_IPS", default=[])
+    if ip and ip.strip()
+)
+
+from apps.webcrm.rate_limit import (  # noqa: E402
+    validate_login_rate_limit_settings,
+    validate_table_identifier,
+)
+
+validate_table_identifier(CRM_SHARED_CACHE_TABLE)
+validate_login_rate_limit_settings(
+    max_attempts=CRM_LOGIN_MAX_ATTEMPTS,
+    max_ip_attempts=CRM_LOGIN_MAX_IP_ATTEMPTS,
+    window_seconds=CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    trusted_proxies=CRM_TRUSTED_PROXY_IPS,
+)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -223,6 +296,11 @@ LOGGING = {
         "apps.accounts": {
             "handlers": ["console"],
             "level": "DEBUG",
+            "propagate": False,
+        },
+        "apps.webcrm": {
+            "handlers": ["console"],
+            "level": env("DJANGO_LOG_LEVEL"),
             "propagate": False,
         },
     },

@@ -31,12 +31,18 @@ class LeadImportUploadLimitMiddleware:
     """Reject oversized import requests before Django parses multipart bodies."""
 
     preview_path = "/api/v1/leads/import/preview/"
+    preview_paths = frozenset(
+        {
+            "/api/v1/leads/import/preview/",
+            "/crm/leads/import/preview/",
+        }
+    )
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path_info != self.preview_path or request.method != "POST":
+        if request.path_info not in self.preview_paths or request.method != "POST":
             return self.get_response(request)
 
         raw_length = request.META.get("CONTENT_LENGTH")

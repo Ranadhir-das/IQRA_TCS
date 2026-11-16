@@ -1,0 +1,9 @@
+<div class="crm-empty-state">
+  <div class="crm-empty-icon">
+    {% include "webcrm/partials/icon.html" with name=icon|default:"inbox" size="20" %}
+  </div>
+  <div class="crm-empty-title">{{ title|default:"No records found" }}</div>
+  {% if description %}
+    <div class="crm-empty-desc">{{ description }}</div>
+  {% endif %}
+</div>

@@ -1,0 +1,320 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}{{ employee.username }} — Employee Detail — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Employee Detail{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <a href="{% url 'webcrm:employee-list' %}" class="btn btn-sm btn-outline-secondary">
+        {% include "webcrm/partials/icon.html" with name="arrow-left" size="14" %}
+        <span>All employees</span>
+      </a>
+      <span class="crm-mono-tag">@{{ employee.username }}</span>
+      {% if employee.is_active %}
+        <span class="badge bg-success"><span class="badge-dot"></span>Active</span>
+      {% else %}
+        <span class="badge bg-secondary"><span class="badge-dot"></span>Inactive</span>
+      {% endif %}
+    </div>
+    <h1 class="crm-page-title mt-2">{{ employee.get_full_name|default:employee.username }}</h1>
+    <div class="crm-page-subtitle">
+      {{ employee.designation|default:"Calling Employee" }}{% if employee.phone %} &middot; <span class="font-monospace">{{ employee.phone }}</span>{% endif %}{% if employee.email %} &middot; {{ employee.email }}{% endif %}
+    </div>
+  </div>
+
+  <div class="crm-page-actions">
+    <form method="post" action="{% url 'webcrm:employee-toggle-active' employee.id %}" class="d-inline">
+      {% csrf_token %}
+      {% if employee.is_active %}
+        <input type="hidden" name="action" value="deactivate">
+        <button type="submit" class="btn btn-outline-danger"
+                data-confirm="Deactivate employee '{{ employee.username }}' and revoke active caller app sessions?">
+          <span>Deactivate employee</span>
+        </button>
+      {% else %}
+        <input type="hidden" name="action" value="activate">
+        <button type="submit" class="btn btn-success"
+                data-confirm="Reactivate employee '{{ employee.username }}'?">
+          <span>Activate employee</span>
+        </button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Workload & Period Performance Metrics -->
+{% if performance %}
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card metric-card">
+        <div>
+          <div class="metric-label">Assigned active leads</div>
+          <div class="metric-value">{{ performance.assigned_active_leads_count }}</div>
+        </div>
+        <div class="metric-sub">Current active calling queue</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card metric-card">
+        <div>
+          <div class="metric-label">Calls in last 30 days</div>
+          <div class="metric-value">{{ performance.calls_count }}</div>
+        </div>
+        <div class="metric-sub">
+          <span>Unique leads: <strong class="text-secondary">{{ performance.unique_leads_called_count }}</strong></span>
+          <span>&middot;</span>
+          <span>Avg: {{ performance.average_call_duration_seconds }}s</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card metric-card">
+        <div>
+          <div class="metric-label">Pending follow-ups</div>
+          <div class="metric-value">{{ performance.pending_followups_count }}</div>
+        </div>
+        <div class="metric-sub">
+          <span class="{% if performance.overdue_followups_count > 0 %}text-danger fw-medium{% endif %}">Overdue: {{ performance.overdue_followups_count }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card metric-card">
+        <div>
+          <div class="metric-label">Completed follow-ups (30d)</div>
+          <div class="metric-value text-success">{{ performance.followups_completed_count }}</div>
+        </div>
+        <div class="metric-sub font-monospace">{{ period.date_from }} to {{ period.date_to }}</div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<div class="row mb-4">
+  <!-- Edit Employee Profile -->
+  <div class="col-lg-7">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">Employee profile</div>
+        <span class="card-header-sub font-monospace">Role: {{ employee.role }}</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{% url 'webcrm:employee-edit' employee.id %}">
+          {% csrf_token %}
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Username (immutable)</label>
+              <input type="text" class="form-control font-monospace" value="{{ employee.username }}" disabled>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Account role</label>
+              <input type="text" class="form-control font-monospace" value="{{ employee.role }}" disabled>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="id_first_name" class="form-label">First name</label>
+              <input type="text" id="id_first_name" name="first_name" class="form-control"
+                     value="{{ employee.first_name }}">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="id_last_name" class="form-label">Last name</label>
+              <input type="text" id="id_last_name" name="last_name" class="form-control"
+                     value="{{ employee.last_name }}">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="id_email" class="form-label">Email address</label>
+              <input type="email" id="id_email" name="email" class="form-control"
+                     value="{{ employee.email }}">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label for="id_phone" class="form-label">Phone number</label>
+              <input type="text" id="id_phone" name="phone" class="form-control font-monospace"
+                     value="{{ employee.phone }}">
+            </div>
+            <div class="col-md-12 mb-3">
+              <label for="id_designation" class="form-label">Designation</label>
+              <input type="text" id="id_designation" name="designation" class="form-control"
+                     value="{{ employee.designation }}">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Save profile changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Password Reset -->
+  <div class="col-lg-5">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">
+          {% include "webcrm/partials/icon.html" with name="key-round" size="16" %}
+          <span>Reset caller password</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <p class="small text-secondary">
+          Resetting an employee password validates the new password against Django security rules and immediately revokes all active mobile JWT refresh tokens for this account.
+        </p>
+        {% if password_error %}
+          <div class="alert alert-danger">
+            {% include "webcrm/partials/icon.html" with name="alert-triangle" %}
+            <div>{{ password_error }}</div>
+          </div>
+        {% endif %}
+        <form method="post" action="{% url 'webcrm:employee-reset-password' employee.id %}">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="id_new_password" class="form-label">New password *</label>
+            <div class="crm-input-with-action">
+              <input type="password" id="id_new_password" name="new_password" class="form-control"
+                     autocomplete="new-password" required>
+              <button type="button"
+                      class="crm-input-toggle-btn"
+                      data-toggle-password="id_new_password"
+                      aria-label="Show password"
+                      title="Show password">
+                {% include "webcrm/partials/icon.html" with name="eye" size="16" %}
+              </button>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="id_confirm_password" class="form-label">Confirm new password</label>
+            <input type="password" id="id_confirm_password" name="confirm_password" class="form-control"
+                   autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn btn-warning btn-sm"
+                  data-confirm="Reset password for '{{ employee.username }}' and revoke active sessions?">
+            <span>Reset password &amp; revoke tokens</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Assigned Leads, Recent Calls & Pending Follow-ups -->
+<div class="row">
+  <div class="col-lg-4 mb-4">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">
+          <span>Assigned active leads</span>
+          <span class="crm-mono-tag">{{ assigned_leads|length }}</span>
+        </div>
+      </div>
+      <div class="card-body-flush">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Lead</th>
+                <th>Phone</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for lead in assigned_leads %}
+                <tr>
+                  <td><a href="{% url 'webcrm:lead-detail' lead.id %}" class="fw-medium">{{ lead.name }}</a></td>
+                  <td class="font-monospace text-muted">{{ lead.phone }}</td>
+                  <td><span class="badge bg-secondary">{{ lead.status }}</span></td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="3">
+                    {% include "webcrm/partials/empty_state.html" with icon="users" title="No active leads assigned" %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 mb-4">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">
+          <span>Recent calls</span>
+          <span class="crm-mono-tag">{{ recent_calls|length }}</span>
+        </div>
+      </div>
+      <div class="card-body-flush">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Lead</th>
+                <th>Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for call in recent_calls %}
+                <tr>
+                  <td class="font-monospace">
+                    <a href="{% url 'webcrm:call-detail' call.id %}">{{ call.started_at|date:"Y-m-d H:i" }}</a>
+                  </td>
+                  <td><a href="{% url 'webcrm:lead-detail' call.lead.id %}" class="fw-medium">{{ call.lead.name }}</a></td>
+                  <td><span class="badge bg-info">{{ call.outcome_label_snapshot }}</span></td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="3">
+                    {% include "webcrm/partials/empty_state.html" with icon="phone-call" title="No calls recorded" %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4 mb-4">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">
+          <span>Pending follow-ups</span>
+          <span class="crm-mono-tag">{{ pending_followups|length }}</span>
+        </div>
+      </div>
+      <div class="card-body-flush">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Scheduled</th>
+                <th>Lead</th>
+                <th class="text-end">Record</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for fu in pending_followups %}
+                <tr>
+                  <td class="font-monospace">{{ fu.scheduled_at|date:"Y-m-d H:i" }}</td>
+                  <td><a href="{% url 'webcrm:lead-detail' fu.lead.id %}" class="fw-medium">{{ fu.lead.name }}</a></td>
+                  <td class="text-end">
+                    <a href="{% url 'webcrm:followup-detail' fu.id %}" class="btn btn-sm btn-outline-secondary">View</a>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="3">
+                    {% include "webcrm/partials/empty_state.html" with icon="calendar-clock" title="No pending follow-ups" %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

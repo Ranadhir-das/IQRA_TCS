@@ -1,0 +1,150 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Employees — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Employees{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <h1 class="crm-page-title">Calling team</h1>
+    <div class="crm-page-subtitle">
+      Manage non-superuser calling employees, review queue load, and inspect period output ({{ period.date_from }} to {{ period.date_to }} IST)
+    </div>
+  </div>
+  <div class="crm-page-actions">
+    <a href="{% url 'webcrm:employee-create' %}" class="btn btn-primary">
+      {% include "webcrm/partials/icon.html" with name="user-plus" size="16" %}
+      <span>Add employee</span>
+    </a>
+  </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" action="{% url 'webcrm:employee-list' %}" class="row align-items-end">
+      <div class="col-md-5">
+        <label for="emp-search" class="form-label">Search employees</label>
+        <input type="text" id="emp-search" name="search" class="form-control"
+               placeholder="Username, name, phone, designation" value="{{ filters.search }}">
+      </div>
+      <div class="col-md-4">
+        <label for="emp-active" class="form-label">Account status</label>
+        <select id="emp-active" name="is_active" class="form-select">
+          <option value="" {% if not filters.is_active %}selected{% endif %}>All employees</option>
+          <option value="true" {% if filters.is_active == 'true' %}selected{% endif %}>Active only</option>
+          <option value="false" {% if filters.is_active == 'false' %}selected{% endif %}>Inactive only</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            {% include "webcrm/partials/icon.html" with name="filter" size="14" %}
+            <span>Apply</span>
+          </button>
+          <a href="{% url 'webcrm:employee-list' %}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Employee Roster Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-title">
+      <span>Employee roster</span>
+      <span class="crm-mono-tag">{{ page_obj.paginator.count }} total</span>
+    </div>
+    <span class="card-header-sub">Superuser accounts are isolated from employee administration</span>
+  </div>
+  <div class="card-body-flush">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Phone &amp; designation</th>
+            <th>Status</th>
+            <th class="text-end">Assigned</th>
+            <th class="text-end">Calls (30d)</th>
+            <th class="text-end">Unique leads</th>
+            <th class="text-end">Pending F/U</th>
+            <th class="text-end">Overdue</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp in page_obj.object_list %}
+            <tr>
+              <td>
+                <a href="{% url 'webcrm:employee-detail' emp.id %}" class="fw-medium">{{ emp.username }}</a>
+                <div class="small text-secondary">{{ emp.get_full_name|default:emp.username }}</div>
+                {% if emp.email %}
+                  <div class="small text-muted">{{ emp.email }}</div>
+                {% endif %}
+              </td>
+              <td>
+                <div class="font-monospace">{{ emp.phone|default:"—" }}</div>
+                <div class="small text-muted">{{ emp.designation|default:"—" }}</div>
+              </td>
+              <td>
+                {% if emp.is_active %}
+                  <span class="badge bg-success"><span class="badge-dot"></span>Active</span>
+                {% else %}
+                  <span class="badge bg-secondary"><span class="badge-dot"></span>Inactive</span>
+                {% endif %}
+              </td>
+              <td class="text-end fw-medium">{{ emp.assigned_active_leads_count }}</td>
+              <td class="text-end fw-medium">{{ emp.calls_count }}</td>
+              <td class="text-end text-secondary">{{ emp.unique_leads_called_count }}</td>
+              <td class="text-end">{{ emp.pending_followups_count }}</td>
+              <td class="text-end {% if emp.overdue_followups_count > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                {{ emp.overdue_followups_count }}
+              </td>
+              <td class="text-end">
+                <a href="{% url 'webcrm:employee-detail' emp.id %}" class="btn btn-sm btn-outline-primary">Manage</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="9">
+                {% include "webcrm/partials/empty_state.html" with icon="user-check" title="No employees match the current filters" description="Adjust the search query or create a new calling employee account." %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <div class="crm-pagination-bar">
+      <span class="small text-muted tabular-nums">
+        Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} employees
+      </span>
+      <ul class="pagination">
+        {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&amp;search={{ filters.search|urlencode }}&amp;is_active={{ filters.is_active|urlencode }}">
+              {% include "webcrm/partials/icon.html" with name="chevron-left" size="14" %}
+              <span>Previous</span>
+            </a>
+          </li>
+        {% endif %}
+        <li class="page-item active">
+          <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        </li>
+        {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}&amp;search={{ filters.search|urlencode }}&amp;is_active={{ filters.is_active|urlencode }}">
+              <span>Next</span>
+              {% include "webcrm/partials/icon.html" with name="chevron-right" size="14" %}
+            </a>
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

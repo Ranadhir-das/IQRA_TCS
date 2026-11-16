@@ -1,0 +1,97 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}IQRA TCS Admin CRM{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'webcrm/css/crm.css' %}">
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <div class="crm-shell">
+    <!-- Persistent & Responsive Sidebar -->
+    {% include "webcrm/partials/sidebar.html" %}
+
+    <!-- Main Workspace -->
+    <div class="crm-main">
+      <header class="crm-topbar">
+        <div class="crm-topbar-left">
+          <button type="button"
+                  class="crm-icon-btn crm-mobile-toggle"
+                  data-action="toggle-mobile-sidebar"
+                  aria-label="Open navigation menu"
+                  aria-controls="crm-sidebar"
+                  aria-expanded="false">
+            {% include "webcrm/partials/icon.html" with name="menu" %}
+          </button>
+          <button type="button"
+                  class="crm-icon-btn crm-desktop-collapse"
+                  data-action="toggle-desktop-sidebar"
+                  title="Toggle sidebar width"
+                  aria-label="Toggle sidebar width">
+            {% include "webcrm/partials/icon.html" with name="panel-left" %}
+          </button>
+          <div class="crm-breadcrumb-bar">
+            <span class="crm-breadcrumb-root">IQRA TCS</span>
+            <span class="crm-breadcrumb-sep">/</span>
+            <span class="crm-topbar-heading">{% block page_heading %}Calling CRM{% endblock %}</span>
+          </div>
+          <div id="hx-loading-indicator" class="crm-hx-indicator" aria-live="polite">
+            {% include "webcrm/partials/icon.html" with name="refresh-cw" size="14" %}
+            <span>Updating</span>
+          </div>
+        </div>
+
+        <div class="crm-topbar-right">
+          <div class="crm-ist-pill" title="Reporting timezone: Asia/Kolkata (IST)">
+            <span class="crm-live-dot" aria-hidden="true"></span>
+            <span id="crm-ist-clock" class="crm-clock">{% now "d M, H:i" %} IST</span>
+          </div>
+
+          {% if request.user.is_authenticated %}
+            <span class="small text-muted d-inline-flex align-items-center gap-2">
+              <strong class="text-secondary">{{ request.user.username }}</strong>
+              {% if request.user.is_superuser %}
+                <span class="badge bg-dark">SUPERUSER</span>
+              {% else %}
+                <span class="badge bg-primary">{{ request.user.role }}</span>
+              {% endif %}
+            </span>
+            <form method="post" action="{% url 'webcrm:logout' %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-secondary">
+                {% include "webcrm/partials/icon.html" with name="log-out" size="14" %}
+                <span>Sign out</span>
+              </button>
+            </form>
+          {% endif %}
+        </div>
+      </header>
+
+      <main class="crm-content">
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }}" role="status">
+              {% if 'success' in message.tags %}
+                {% include "webcrm/partials/icon.html" with name="check-circle-2" %}
+              {% elif 'error' in message.tags or 'danger' in message.tags %}
+                {% include "webcrm/partials/icon.html" with name="x-circle" %}
+              {% elif 'warning' in message.tags %}
+                {% include "webcrm/partials/icon.html" with name="alert-triangle" %}
+              {% else %}
+                {% include "webcrm/partials/icon.html" with name="info" %}
+              {% endif %}
+              <div>{{ message }}</div>
+            </div>
+          {% endfor %}
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  {% include "webcrm/partials/confirm_modal.html" %}
+  <script src="{% static 'webcrm/js/crm.js' %}"></script>
+</body>
+</html>

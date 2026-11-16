@@ -1,0 +1,312 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}{{ lead.name }} — Lead Detail — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Lead Detail{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <a href="{% url 'webcrm:lead-list' %}" class="btn btn-sm btn-outline-secondary">
+        {% include "webcrm/partials/icon.html" with name="arrow-left" size="14" %}
+        <span>All leads</span>
+      </a>
+      <span class="crm-mono-tag">Lead #{{ lead.id }}</span>
+      {% if lead.is_archived %}
+        <span class="badge bg-warning"><span class="badge-dot"></span>Archived</span>
+      {% else %}
+        <span class="badge bg-success"><span class="badge-dot"></span>Active</span>
+      {% endif %}
+      <span class="badge {% if lead.status == 'CONVERTED' %}bg-success{% elif lead.status == 'INTERESTED' %}bg-primary{% elif lead.status == 'NOT_INTERESTED' %}bg-danger{% elif lead.status == 'CONTACTED' %}bg-info{% else %}bg-secondary{% endif %}">
+        <span class="badge-dot"></span>{{ lead.get_status_display }}
+      </span>
+    </div>
+    <h1 class="crm-page-title mt-2">{{ lead.name }}</h1>
+    <div class="crm-page-subtitle font-monospace">
+      {{ lead.phone }}{% if lead.alternate_phone %} &middot; Alt: {{ lead.alternate_phone }}{% endif %}{% if lead.email %} &middot; {{ lead.email }}{% endif %}
+    </div>
+  </div>
+
+  <div class="crm-page-actions">
+    <a href="{% url 'webcrm:lead-edit' lead.id %}" class="btn btn-primary">
+      {% include "webcrm/partials/icon.html" with name="edit-3" size="16" %}
+      <span>Edit lead</span>
+    </a>
+    <form method="post" action="{% url 'webcrm:lead-archive-toggle' lead.id %}" class="d-inline">
+      {% csrf_token %}
+      {% if lead.is_archived %}
+        <input type="hidden" name="action" value="unarchive">
+        <button type="submit" class="btn btn-success" data-confirm="Restore '{{ lead.name }}' to active calling queues?">
+          {% include "webcrm/partials/icon.html" with name="archive" size="16" %}
+          <span>Unarchive lead</span>
+        </button>
+      {% else %}
+        <input type="hidden" name="action" value="archive">
+        <button type="submit" class="btn btn-outline-danger" data-confirm="Archive '{{ lead.name }}' and remove from active calling queues?">
+          {% include "webcrm/partials/icon.html" with name="archive" size="16" %}
+          <span>Archive lead</span>
+        </button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="row mb-4">
+  <!-- Student Enquiry Dossier Card -->
+  <div class="col-lg-7">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">Student &amp; enquiry dossier</div>
+        <span class="card-header-sub font-monospace">Updated {{ lead.updated_at|date:"Y-m-d H:i" }} IST</span>
+      </div>
+      <div class="card-body">
+        <div class="crm-dossier-grid">
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Student full name</span>
+            <span class="crm-dossier-value">{{ lead.name }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Current status</span>
+            <span class="crm-dossier-value">{{ lead.get_status_display }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Primary phone</span>
+            <span class="crm-dossier-value font-monospace">{{ lead.phone }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Alternate phone</span>
+            <span class="crm-dossier-value font-monospace">{{ lead.alternate_phone|default:"—" }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Email address</span>
+            <span class="crm-dossier-value">{{ lead.email|default:"—" }}</span>
+          </div>
+          <div class="crm-dossier-item">
+            <span class="crm-dossier-label">Course interest</span>
+            <span class="crm-dossier-value">{{ lead.course_interest|default:"—" }}</span>
+          </div>
+          <div class="crm-dossier-item full-span">
+            <span class="crm-dossier-label">Enquiry details (visible to assigned caller)</span>
+            <span class="crm-dossier-value fw-normal text-secondary">{{ lead.enquiry_details|default:"—" }}</span>
+          </div>
+          <div class="crm-dossier-item full-span">
+            <span class="crm-dossier-label">Admin internal notes (restricted to administrators)</span>
+            <span class="crm-dossier-value fw-normal text-secondary">{{ lead.internal_notes|default:"—" }}</span>
+          </div>
+          <div class="crm-dossier-item full-span" style="border-bottom: none; padding-bottom: 0;">
+            <span class="crm-dossier-label">Record created</span>
+            <span class="crm-dossier-value small text-muted font-monospace">
+              {{ lead.created_at|date:"Y-m-d H:i:s" }} IST{% if lead.created_by %} by {{ lead.created_by.username }}{% endif %}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Queue Assignment Control Card -->
+  <div class="col-lg-5">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">Calling queue assignment</div>
+        <span class="card-header-sub">Audited ownership</span>
+      </div>
+      <div class="card-body">
+        <div class="p-3 mb-3" style="background: var(--crm-surface-subtle); border: 1px solid var(--crm-border); border-radius: var(--radius-sm);">
+          <div class="small text-muted mb-1">Current assignee</div>
+          {% if lead.assigned_to %}
+            <div class="d-flex align-items-center justify-content-between gap-2">
+              <div>
+                <a href="{% url 'webcrm:employee-detail' lead.assigned_to.id %}" class="fw-medium">{{ lead.assigned_to.username }}</a>
+                <span class="text-secondary small">({{ lead.assigned_to.get_full_name|default:lead.assigned_to.username }})</span>
+              </div>
+              {% if not lead.assigned_to.is_active %}
+                <span class="badge bg-secondary">Inactive</span>
+              {% else %}
+                <span class="badge bg-success"><span class="badge-dot"></span>Active caller</span>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="fw-medium text-muted">Unassigned</div>
+          {% endif %}
+        </div>
+
+        <form method="post" action="{% url 'webcrm:lead-assign' lead.id %}">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="assign-employee" class="form-label">Assign or reassign to employee</label>
+            <select id="assign-employee" name="assigned_to" class="form-select" {% if lead.is_archived %}disabled{% endif %}>
+              <option value="">— Unassigned —</option>
+              {% for emp in active_employees %}
+                <option value="{{ emp.id }}" {% if lead.assigned_to_id == emp.id %}selected{% endif %}>
+                  {{ emp.username }} — {{ emp.get_full_name|default:emp.username }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="assign-reason" class="form-label">Assignment reason (audit log)</label>
+            <input type="text" id="assign-reason" name="reason" class="form-control"
+                   placeholder="Workload balancing or course specialization"
+                   {% if lead.is_archived %}disabled{% endif %}>
+          </div>
+          <button type="submit" class="btn btn-primary" {% if lead.is_archived %}disabled{% endif %}>
+            <span>Update assignment</span>
+          </button>
+          {% if lead.is_archived %}
+            <div class="form-hint mt-2">Archived leads cannot be assigned. Unarchive this lead first to reassign.</div>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Call History & Follow-ups for This Lead -->
+<div class="row mb-4">
+  <div class="col-lg-6">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">
+          <span>Call history</span>
+          <span class="crm-mono-tag">{{ calls|length }}</span>
+        </div>
+        <span class="card-header-sub">Immutable snapshots</span>
+      </div>
+      <div class="card-body-flush">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Started (IST)</th>
+                <th>Caller</th>
+                <th>Outcome</th>
+                <th class="text-end">Duration</th>
+                <th class="text-end">Record</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for call in calls %}
+                <tr>
+                  <td class="font-monospace text-muted">{{ call.started_at|date:"Y-m-d H:i" }}</td>
+                  <td class="fw-medium">{{ call.caller_username_snapshot }}</td>
+                  <td>
+                    <span class="badge bg-info"><span class="badge-dot"></span>{{ call.outcome_label_snapshot }}</span>
+                  </td>
+                  <td class="text-end font-monospace">{{ call.duration_seconds }}s</td>
+                  <td class="text-end">
+                    <a href="{% url 'webcrm:call-detail' call.id %}" class="btn btn-sm btn-outline-secondary">Details</a>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5">
+                    {% include "webcrm/partials/empty_state.html" with icon="phone-call" title="No calls recorded for this lead" description="Calls submitted by the assigned employee will appear here." %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div class="card-header-title">
+          <span>Follow-ups</span>
+          <span class="crm-mono-tag">{{ follow_ups|length }}</span>
+        </div>
+        <span class="card-header-sub">Scheduled callbacks</span>
+      </div>
+      <div class="card-body-flush">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Scheduled (IST)</th>
+                <th>Owner</th>
+                <th>Status</th>
+                <th>Notes</th>
+                <th class="text-end">Record</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for fu in follow_ups %}
+                <tr>
+                  <td class="font-monospace">{{ fu.scheduled_at|date:"Y-m-d H:i" }}</td>
+                  <td class="fw-medium">{{ fu.owner.username }}</td>
+                  <td>
+                    {% if fu.status == 'COMPLETED' %}
+                      <span class="badge bg-success"><span class="badge-dot"></span>{{ fu.status }}</span>
+                    {% elif fu.status == 'CANCELLED' %}
+                      <span class="badge bg-secondary"><span class="badge-dot"></span>{{ fu.status }}</span>
+                    {% else %}
+                      <span class="badge bg-primary"><span class="badge-dot"></span>{{ fu.status }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="small text-secondary">{{ fu.notes|truncatechars:40|default:"—" }}</td>
+                  <td class="text-end">
+                    <a href="{% url 'webcrm:followup-detail' fu.id %}" class="btn btn-sm btn-outline-secondary">Details</a>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5">
+                    {% include "webcrm/partials/empty_state.html" with icon="calendar-clock" title="No follow-ups scheduled" description="Follow-ups scheduled for this lead will appear here." %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Assignment Audit History -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-title">
+      <span>Assignment audit history</span>
+      <span class="crm-mono-tag">{{ assignment_history|length }}</span>
+    </div>
+    <span class="card-header-sub">Chronological ownership log</span>
+  </div>
+  <div class="card-body-flush">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Changed at (IST)</th>
+            <th>Previous employee</th>
+            <th>New employee</th>
+            <th>Changed by</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in assignment_history %}
+            <tr>
+              <td class="font-monospace text-muted">{{ item.changed_at|date:"Y-m-d H:i:s" }}</td>
+              <td class="text-secondary">{{ item.previous_employee.username|default:"Unassigned" }}</td>
+              <td class="fw-medium">{{ item.new_employee.username|default:"Unassigned" }}</td>
+              <td class="text-secondary">{{ item.changed_by.username|default:"—" }}</td>
+              <td class="small text-secondary">{{ item.reason|default:"—" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5">
+                {% include "webcrm/partials/empty_state.html" with icon="history" title="No assignment changes recorded" description="Future assignment or reassignment events will be logged here." %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

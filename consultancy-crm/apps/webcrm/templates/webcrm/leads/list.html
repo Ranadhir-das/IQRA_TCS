@@ -1,0 +1,89 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Leads — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}All Leads{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <h1 class="crm-page-title">Student leads</h1>
+    <div class="crm-page-subtitle">
+      Search, filter, assign calling queues, or import student enquiry records
+    </div>
+  </div>
+  <div class="crm-page-actions">
+    <a href="{% url 'webcrm:lead-import' %}" class="btn btn-outline-secondary">
+      {% include "webcrm/partials/icon.html" with name="upload" size="16" %}
+      <span>Import CSV / XLSX</span>
+    </a>
+    <a href="{% url 'webcrm:lead-create' %}" class="btn btn-primary">
+      {% include "webcrm/partials/icon.html" with name="plus" size="16" %}
+      <span>Add lead</span>
+    </a>
+  </div>
+</div>
+
+<!-- Search & Filter Bar -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" action="{% url 'webcrm:lead-list' %}"
+          hx-get="{% url 'webcrm:lead-list' %}"
+          hx-target="#leads-table-container"
+          hx-push-url="true"
+          class="row align-items-end">
+      <div class="col-md-3">
+        <label for="lead-search" class="form-label">Search</label>
+        <input type="text" id="lead-search" name="search" class="form-control"
+               placeholder="Name, phone, email, course" value="{{ filters.search }}">
+      </div>
+      <div class="col-md-2">
+        <label for="lead-status" class="form-label">Status</label>
+        <select id="lead-status" name="status" class="form-select">
+          <option value="">All statuses</option>
+          {% for code, label in lead_statuses %}
+            <option value="{{ code }}" {% if filters.status == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="lead-assigned" class="form-label">Assigned employee</label>
+        <select id="lead-assigned" name="assigned_to" class="form-select">
+          <option value="">Any employee</option>
+          {% for emp in employees %}
+            <option value="{{ emp.id }}" {% if filters.assigned_to == emp.id %}selected{% endif %}>
+              {{ emp.username }} ({{ emp.get_full_name|default:emp.username }}){% if not emp.is_active %} [Inactive]{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="lead-unassigned" class="form-label">Assignment</label>
+        <select id="lead-unassigned" name="unassigned" class="form-select">
+          <option value="" {% if not filters.unassigned %}selected{% endif %}>All leads</option>
+          <option value="true" {% if filters.unassigned == 'true' %}selected{% endif %}>Unassigned only</option>
+          <option value="false" {% if filters.unassigned == 'false' %}selected{% endif %}>Assigned only</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="lead-archived" class="form-label">Visibility</label>
+        <select id="lead-archived" name="archived" class="form-select">
+          <option value="false" {% if filters.archived == 'false' %}selected{% endif %}>Active leads</option>
+          <option value="true" {% if filters.archived == 'true' %}selected{% endif %}>Archived leads</option>
+          <option value="all" {% if filters.archived == 'all' %}selected{% endif %}>All leads</option>
+        </select>
+      </div>
+      <div class="col-12 mt-2 d-flex justify-content-end gap-2">
+        <button type="submit" class="btn btn-primary btn-sm">
+          {% include "webcrm/partials/icon.html" with name="filter" size="14" %}
+          <span>Apply filters</span>
+        </button>
+        <a href="{% url 'webcrm:lead-list' %}" class="btn btn-outline-secondary btn-sm">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="leads-table-container">
+  {% include "webcrm/partials/leads_table.html" %}
+</div>
+{% endblock %}

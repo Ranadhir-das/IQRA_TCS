@@ -1,0 +1,223 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Reports &amp; Exports — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Reports{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <h1 class="crm-page-title">Reports &amp; data exports</h1>
+    <div class="crm-page-subtitle">
+      Interactive reporting and formula-safe CSV / XLSX export center (Asia/Kolkata timezone)
+    </div>
+  </div>
+  <div class="crm-page-actions">
+    <div class="crm-segmented" role="tablist" aria-label="Report dataset selector">
+      <a href="{% url 'webcrm:reports-hub' %}?report_type=employee_performance"
+         class="crm-segment-link {% if report_type == 'employee_performance' %}active{% endif %}">
+        Employee performance
+      </a>
+      <a href="{% url 'webcrm:reports-hub' %}?report_type=calls"
+         class="crm-segment-link {% if report_type == 'calls' %}active{% endif %}">
+        Calls audit
+      </a>
+      <a href="{% url 'webcrm:reports-hub' %}?report_type=leads"
+         class="crm-segment-link {% if report_type == 'leads' %}active{% endif %}">
+        Leads summary
+      </a>
+      <a href="{% url 'webcrm:reports-hub' %}?report_type=followups"
+         class="crm-segment-link {% if report_type == 'followups' %}active{% endif %}">
+        Follow-ups
+      </a>
+    </div>
+  </div>
+</div>
+
+{% if filter_errors %}
+  <div class="alert alert-danger">
+    {% include "webcrm/partials/icon.html" with name="alert-triangle" %}
+    <div>{{ filter_errors }}</div>
+  </div>
+{% endif %}
+
+<!-- Dynamic Filter & Export Form -->
+<div class="card mb-4">
+  <div class="card-header">
+    <div>
+      <div class="card-header-title">
+        <span>Dataset filters — {{ report_type }}</span>
+      </div>
+      <div class="card-header-sub">Reporting window: {{ period.date_from }} to {{ period.date_to }} IST</div>
+    </div>
+    <span class="crm-mono-tag">{{ total_matching_rows }} matching rows</span>
+  </div>
+  <div class="card-body">
+    <form method="get" action="{% url 'webcrm:reports-hub' %}" class="row align-items-end">
+      <input type="hidden" name="report_type" value="{{ report_type }}">
+
+      <div class="col-md-2">
+        <label for="rep-from" class="form-label">Date from (IST)</label>
+        <input type="date" id="rep-from" name="date_from" class="form-control"
+               value="{{ query_params.date_from|default:'' }}">
+      </div>
+      <div class="col-md-2">
+        <label for="rep-to" class="form-label">Date to (IST)</label>
+        <input type="date" id="rep-to" name="date_to" class="form-control"
+               value="{{ query_params.date_to|default:'' }}">
+      </div>
+
+      {% if report_type == 'employee_performance' or report_type == 'calls' or report_type == 'followups' %}
+        <div class="col-md-3">
+          <label for="rep-emp" class="form-label">Employee</label>
+          <select id="rep-emp" name="employee_id" class="form-select">
+            <option value="">All employees</option>
+            {% for emp in employees %}
+              <option value="{{ emp.id }}" {% if query_params.employee_id == emp.id|stringformat:"s" %}selected{% endif %}>
+                {{ emp.username }} ({{ emp.get_full_name|default:emp.username }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endif %}
+
+      {% if report_type == 'employee_performance' %}
+        <div class="col-md-2">
+          <label for="rep-active" class="form-label">Employee status</label>
+          <select id="rep-active" name="is_active" class="form-select">
+            <option value="">All</option>
+            <option value="true" {% if query_params.is_active == 'true' %}selected{% endif %}>Active</option>
+            <option value="false" {% if query_params.is_active == 'false' %}selected{% endif %}>Inactive</option>
+          </select>
+        </div>
+      {% endif %}
+
+      {% if report_type == 'calls' %}
+        <div class="col-md-3">
+          <label for="rep-outcome" class="form-label">Outcome snapshot</label>
+          <select id="rep-outcome" name="outcome_code" class="form-select">
+            <option value="">All outcomes</option>
+            {% for outcome in outcomes %}
+              <option value="{{ outcome.code }}" {% if query_params.outcome_code == outcome.code %}selected{% endif %}>
+                {{ outcome.code }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      {% endif %}
+
+      {% if report_type == 'leads' %}
+        <div class="col-md-2">
+          <label for="rep-lead-status" class="form-label">Lead status</label>
+          <select id="rep-lead-status" name="status" class="form-select">
+            <option value="">All statuses</option>
+            {% for code, label in lead_statuses %}
+              <option value="{{ code }}" {% if query_params.status == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="rep-assigned" class="form-label">Assigned to</label>
+          <select id="rep-assigned" name="assigned_to" class="form-select">
+            <option value="">All employees</option>
+            {% for emp in employees %}
+              <option value="{{ emp.id }}" {% if query_params.assigned_to == emp.id|stringformat:"s" %}selected{% endif %}>
+                {{ emp.username }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="rep-archived" class="form-label">Visibility</label>
+          <select id="rep-archived" name="is_archived" class="form-select">
+            <option value="">All leads</option>
+            <option value="false" {% if query_params.is_archived == 'false' %}selected{% endif %}>Active only</option>
+            <option value="true" {% if query_params.is_archived == 'true' %}selected{% endif %}>Archived only</option>
+          </select>
+        </div>
+      {% endif %}
+
+      {% if report_type == 'followups' %}
+        <div class="col-md-2">
+          <label for="rep-fu-status" class="form-label">Follow-up status</label>
+          <select id="rep-fu-status" name="status" class="form-select">
+            <option value="">All statuses</option>
+            {% for code, label in followup_statuses %}
+              <option value="{{ code }}" {% if query_params.status == code %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="rep-due-state" class="form-label">Due state</label>
+          <select id="rep-due-state" name="due_state" class="form-select">
+            <option value="">All</option>
+            <option value="overdue" {% if query_params.due_state == 'overdue' %}selected{% endif %}>Overdue</option>
+            <option value="today" {% if query_params.due_state == 'today' %}selected{% endif %}>Due today</option>
+            <option value="upcoming" {% if query_params.due_state == 'upcoming' %}selected{% endif %}>Upcoming</option>
+          </select>
+        </div>
+      {% endif %}
+
+      <div class="col-12 mt-3 pt-3 d-flex flex-wrap align-items-center justify-content-between gap-2" style="border-top: 1px solid var(--crm-border);">
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary btn-sm">
+            {% include "webcrm/partials/icon.html" with name="filter" size="14" %}
+            <span>Preview report</span>
+          </button>
+          <a href="{% url 'webcrm:reports-hub' %}?report_type={{ report_type }}" class="btn btn-outline-secondary btn-sm">Reset filters</a>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" formaction="{% url 'webcrm:reports-export' %}" name="export_format" value="csv"
+                  class="btn btn-outline-primary btn-sm">
+            {% include "webcrm/partials/icon.html" with name="download" size="14" %}
+            <span>Download CSV</span>
+          </button>
+          <button type="submit" formaction="{% url 'webcrm:reports-export' %}" name="export_format" value="xlsx"
+                  class="btn btn-success btn-sm">
+            {% include "webcrm/partials/icon.html" with name="file-spreadsheet" size="14" %}
+            <span>Download XLSX</span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Preview Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-title">
+      <span>Report preview</span>
+      <span class="crm-mono-tag">{{ total_matching_rows }} matching rows</span>
+    </div>
+    <span class="card-header-sub">Showing first {{ preview_rows|length }} rows</span>
+  </div>
+  <div class="card-body-flush">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            {% for h in preview_headers %}
+              <th>{{ h }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in preview_rows %}
+            <tr>
+              {% for cell in row %}
+                <td class="small tabular-nums">{{ cell }}</td>
+              {% endfor %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="{{ preview_headers|length|default:1 }}">
+                {% include "webcrm/partials/empty_state.html" with icon="bar-chart-3" title="No rows match the current report filters" description="Adjust the date range or filter parameters above to preview report data." %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

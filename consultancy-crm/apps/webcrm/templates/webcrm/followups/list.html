@@ -1,0 +1,194 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Follow-ups — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Follow-ups{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <h1 class="crm-page-title">Follow-up schedule</h1>
+    <div class="crm-page-subtitle">
+      Organization-wide callback schedule across all calling employees (Asia/Kolkata calendar)
+    </div>
+  </div>
+  <div class="crm-page-actions">
+    <div class="crm-segmented" role="group" aria-label="Quick follow-up state filters">
+      <a href="{% url 'webcrm:followup-list' %}"
+         class="crm-segment-link {% if not filters.due_state and not filters.status %}active{% endif %}">
+        All
+      </a>
+      <a href="{% url 'webcrm:followup-list' %}?due_state=overdue"
+         class="crm-segment-link {% if filters.due_state == 'overdue' %}active{% endif %}">
+        <span class="badge-dot" style="background: var(--crm-danger);"></span>
+        <span>Overdue</span>
+      </a>
+      <a href="{% url 'webcrm:followup-list' %}?due_state=today"
+         class="crm-segment-link {% if filters.due_state == 'today' %}active{% endif %}">
+        <span class="badge-dot" style="background: var(--crm-warning);"></span>
+        <span>Due today</span>
+      </a>
+      <a href="{% url 'webcrm:followup-list' %}?due_state=upcoming"
+         class="crm-segment-link {% if filters.due_state == 'upcoming' %}active{% endif %}">
+        <span>Upcoming</span>
+      </a>
+      <a href="{% url 'webcrm:followup-list' %}?status=COMPLETED"
+         class="crm-segment-link {% if filters.status == 'COMPLETED' %}active{% endif %}">
+        <span>Completed</span>
+      </a>
+      <a href="{% url 'webcrm:followup-list' %}?status=CANCELLED"
+         class="crm-segment-link {% if filters.status == 'CANCELLED' %}active{% endif %}">
+        <span>Cancelled</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" action="{% url 'webcrm:followup-list' %}" class="row align-items-end">
+      <div class="col-md-2">
+        <label for="fu-due" class="form-label">Due state</label>
+        <select id="fu-due" name="due_state" class="form-select">
+          <option value="" {% if not filters.due_state %}selected{% endif %}>Any due state</option>
+          <option value="overdue" {% if filters.due_state == 'overdue' %}selected{% endif %}>Overdue (pending)</option>
+          <option value="today" {% if filters.due_state == 'today' %}selected{% endif %}>Due today (pending)</option>
+          <option value="upcoming" {% if filters.due_state == 'upcoming' %}selected{% endif %}>Upcoming (pending)</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="fu-status" class="form-label">Status</label>
+        <select id="fu-status" name="status" class="form-select">
+          <option value="">All statuses</option>
+          {% for code, label in followup_statuses %}
+            <option value="{{ code }}" {% if filters.status == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="fu-emp" class="form-label">Owner employee</label>
+        <select id="fu-emp" name="employee_id" class="form-select">
+          <option value="">All employees</option>
+          {% for emp in employees %}
+            <option value="{{ emp.id }}" {% if filters.employee_id == emp.id %}selected{% endif %}>
+              {{ emp.username }}{% if not emp.is_active %} [Inactive]{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label for="fu-from" class="form-label">Scheduled from</label>
+        <input type="date" id="fu-from" name="date_from" class="form-control" value="{{ filters.date_from }}">
+      </div>
+      <div class="col-md-2">
+        <label for="fu-to" class="form-label">Scheduled to</label>
+        <input type="date" id="fu-to" name="date_to" class="form-control" value="{{ filters.date_to }}">
+      </div>
+      <div class="col-md-1">
+        <button type="submit" class="btn btn-primary" style="width: 100%;">Go</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Follow-ups Table -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-title">
+      <span>Follow-up queue</span>
+      <span class="crm-mono-tag">{{ page_obj.paginator.count }} total</span>
+    </div>
+    <span class="card-header-sub">Sorted chronologically by scheduled time</span>
+  </div>
+  <div class="card-body-flush">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Scheduled at (IST)</th>
+            <th>Student lead</th>
+            <th>Owner employee</th>
+            <th>Status</th>
+            <th>Notes</th>
+            <th class="text-end">Record</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fu in page_obj.object_list %}
+            <tr>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="font-monospace fw-medium">{{ fu.scheduled_at|date:"Y-m-d H:i" }}</span>
+                  {% if fu.status == 'PENDING' and fu.scheduled_at < today_midnight %}
+                    <span class="badge bg-danger"><span class="badge-dot"></span>OVERDUE</span>
+                  {% elif fu.status == 'PENDING' and fu.scheduled_at < tomorrow_midnight %}
+                    <span class="badge bg-warning"><span class="badge-dot"></span>DUE TODAY</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <a href="{% url 'webcrm:lead-detail' fu.lead.id %}" class="fw-medium">{{ fu.lead.name }}</a>
+                <div class="font-monospace text-muted">{{ fu.lead.phone }}</div>
+              </td>
+              <td>
+                <a href="{% url 'webcrm:employee-detail' fu.owner.id %}" class="fw-medium">{{ fu.owner.username }}</a>
+                {% if not fu.owner.is_active %}
+                  <span class="badge bg-secondary">Inactive</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if fu.status == 'COMPLETED' %}
+                  <span class="badge bg-success"><span class="badge-dot"></span>{{ fu.status }}</span>
+                {% elif fu.status == 'CANCELLED' %}
+                  <span class="badge bg-secondary"><span class="badge-dot"></span>{{ fu.status }}</span>
+                {% else %}
+                  <span class="badge bg-primary"><span class="badge-dot"></span>{{ fu.status }}</span>
+                {% endif %}
+              </td>
+              <td class="small text-secondary">{{ fu.notes|truncatechars:64|default:"—" }}</td>
+              <td class="text-end">
+                <a href="{% url 'webcrm:followup-detail' fu.id %}" class="btn btn-sm btn-outline-secondary">Inspect</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6">
+                {% include "webcrm/partials/empty_state.html" with icon="calendar-clock" title="No follow-ups match the selected filters" description="Try selecting a different due state or clearing the date range." %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+    <div class="crm-pagination-bar">
+      <span class="small text-muted tabular-nums">
+        Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} follow-ups
+      </span>
+      <ul class="pagination">
+        {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&amp;due_state={{ filters.due_state|urlencode }}&amp;status={{ filters.status|urlencode }}&amp;employee_id={{ filters.employee_id|default:'' }}&amp;date_from={{ filters.date_from|urlencode }}&amp;date_to={{ filters.date_to|urlencode }}">
+              {% include "webcrm/partials/icon.html" with name="chevron-left" size="14" %}
+              <span>Previous</span>
+            </a>
+          </li>
+        {% endif %}
+        <li class="page-item active">
+          <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        </li>
+        {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}&amp;due_state={{ filters.due_state|urlencode }}&amp;status={{ filters.status|urlencode }}&amp;employee_id={{ filters.employee_id|default:'' }}&amp;date_from={{ filters.date_from|urlencode }}&amp;date_to={{ filters.date_to|urlencode }}">
+              <span>Next</span>
+              {% include "webcrm/partials/icon.html" with name="chevron-right" size="14" %}
+            </a>
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

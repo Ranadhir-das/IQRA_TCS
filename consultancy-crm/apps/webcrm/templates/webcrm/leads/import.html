@@ -1,0 +1,225 @@
+{% extends "webcrm/base.html" %}
+
+{% block title %}Import Leads — IQRA TCS Admin CRM{% endblock %}
+{% block page_heading %}Import Leads{% endblock %}
+
+{% block content %}
+<div class="crm-page-header">
+  <div>
+    <div class="mb-2">
+      <a href="{% url 'webcrm:lead-list' %}" class="btn btn-sm btn-outline-secondary">
+        {% include "webcrm/partials/icon.html" with name="arrow-left" size="14" %}
+        <span>All leads</span>
+      </a>
+    </div>
+    <h1 class="crm-page-title">Staged lead import</h1>
+    <div class="crm-page-subtitle">
+      Upload a CSV or XLSX spreadsheet to validate rows and preview duplicate handling before committing to the database
+    </div>
+  </div>
+</div>
+
+<!-- Step 1: Upload & Preview Form -->
+<div class="card mb-4">
+  <div class="card-header">
+    <div>
+      <div class="card-header-title">Step 1: Upload spreadsheet for staged validation</div>
+      <div class="card-header-sub">No database leads are created during the preview step</div>
+    </div>
+    <span class="crm-mono-tag">.csv &middot; .xlsx</span>
+  </div>
+  <div class="card-body">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        {% include "webcrm/partials/icon.html" with name="alert-triangle" %}
+        <div>
+          {% for err in form.non_field_errors %}
+            <div>{{ err }}</div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if commit_error %}
+      <div class="alert alert-danger">
+        {% include "webcrm/partials/icon.html" with name="alert-triangle" %}
+        <div>{{ commit_error }}</div>
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'webcrm:lead-import-preview' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="row align-items-end">
+        <div class="col-md-5">
+          <label for="id_file" class="form-label">Spreadsheet file (.csv or .xlsx)</label>
+          {{ form.file }}
+          {% if form.file.errors %}
+            <div class="text-danger small mt-1">{{ form.file.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          <label for="id_duplicate_policy" class="form-label">Duplicate phone policy</label>
+          {{ form.duplicate_policy }}
+          {% if form.duplicate_policy.errors %}
+            <div class="text-danger small mt-1">{{ form.duplicate_policy.errors|join:", " }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-3">
+          <button type="submit" class="btn btn-primary" style="width: 100%;">
+            {% include "webcrm/partials/icon.html" with name="upload" size="16" %}
+            <span>Preview &amp; stage import</span>
+          </button>
+        </div>
+      </div>
+      <div class="form-hint mt-3">
+        Supported column headers: <code>name</code> (required), <code>phone</code> (required),
+        <code>alternate_phone</code>, <code>email</code>, <code>course_interest</code>,
+        <code>enquiry_details</code>, <code>internal_notes</code>.
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Step 2: Staged Preview & Explicit Confirmation -->
+{% if staged %}
+  <div class="card mb-4">
+    <div class="card-header">
+      <div>
+        <div class="card-header-title">Step 2: Review staged import #{{ staged.id }}</div>
+        <div class="card-header-sub">Duplicate policy: {{ staged.duplicate_policy|upper }}</div>
+      </div>
+      <span class="badge bg-info font-monospace">Expires {{ staged.expires_at|date:"Y-m-d H:i:s" }} IST</span>
+    </div>
+    <div class="card-body">
+      <div class="row mb-4">
+        <div class="col-md-3">
+          <div class="card metric-card">
+            <div class="metric-label">Total rows</div>
+            <div class="metric-value">{{ summary.total }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card metric-card">
+            <div class="metric-label">Importable rows</div>
+            <div class="metric-value text-success">{{ summary.valid }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card metric-card">
+            <div class="metric-label">Duplicate rows</div>
+            <div class="metric-value text-warning">{{ summary.duplicate }}</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card metric-card">
+            <div class="metric-label">Invalid rows</div>
+            <div class="metric-value text-danger">{{ summary.invalid }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Explicit Commit / Cancel Controls -->
+      <div class="crm-bulk-toolbar mb-4">
+        <form method="post" action="{% url 'webcrm:lead-import-commit' %}" class="d-flex flex-wrap align-items-center gap-3">
+          {% csrf_token %}
+          <input type="hidden" name="staged_import_id" value="{{ staged.id }}">
+          <input type="hidden" name="commit_token" value="{{ commit_token }}">
+          <div class="form-check">
+            <input type="checkbox" id="id_confirm_commit" name="confirm_commit" value="yes" class="form-check-input" required>
+            <label for="id_confirm_commit" class="fw-medium">
+              I have reviewed the staged preview and confirm committing valid rows to the CRM database
+            </label>
+          </div>
+          <button type="submit" class="btn btn-success btn-sm">
+            {% include "webcrm/partials/icon.html" with name="check-circle-2" size="14" %}
+            <span>Commit staged import</span>
+          </button>
+        </form>
+
+        <form method="post" action="{% url 'webcrm:lead-import-cancel' staged.id %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-danger btn-sm"
+                  data-confirm="Cancel and discard this staged import?">
+            <span>Cancel staged import</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Row-by-row Preview Table -->
+      <div class="crm-section-header">
+        <h3 class="crm-section-title">Row validation preview</h3>
+        <span class="crm-section-meta">Showing {{ preview_rows|length }} of {{ total_preview_rows }} rows</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width: 90px;">Row #</th>
+              <th style="width: 180px;">Outcome</th>
+              <th>Validation &amp; duplicate details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in preview_rows %}
+              <tr>
+                <td class="font-monospace">{{ row.row_number }}</td>
+                <td>
+                  {% if row.outcome == 'importable' %}
+                    <span class="badge bg-success"><span class="badge-dot"></span>Importable</span>
+                  {% elif row.outcome == 'duplicate' or row.outcome == 'duplicate_allowed' %}
+                    <span class="badge bg-warning"><span class="badge-dot"></span>{{ row.outcome }}</span>
+                  {% else %}
+                    <span class="badge bg-danger"><span class="badge-dot"></span>Invalid</span>
+                  {% endif %}
+                </td>
+                <td class="small">
+                  {% if row.errors %}
+                    <span class="text-danger">{{ row.errors }}</span>
+                  {% elif row.outcome == 'duplicate' %}
+                    <span class="text-warning">Duplicate phone number — will be skipped</span>
+                  {% elif row.outcome == 'duplicate_allowed' %}
+                    <span class="text-warning">Duplicate phone number — permitted by policy</span>
+                  {% else %}
+                    <span class="text-success">Ready to import</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<!-- Step 3: Commit Summary Result -->
+{% if commit_result %}
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-title">Import commit result (staged #{{ commit_result.staged_import_id }})</div>
+      <span class="badge bg-success"><span class="badge-dot"></span>Committed</span>
+    </div>
+    <div class="card-body">
+      <div class="row mb-3">
+        <div class="col-md-3">
+          <div class="metric-label">Total rows</div>
+          <div class="metric-value">{{ commit_result.total_rows }}</div>
+        </div>
+        <div class="col-md-3">
+          <div class="metric-label">Created leads</div>
+          <div class="metric-value text-success">{{ commit_result.created }}</div>
+        </div>
+        <div class="col-md-3">
+          <div class="metric-label">Skipped duplicates</div>
+          <div class="metric-value text-warning">{{ commit_result.skipped }}</div>
+        </div>
+        <div class="col-md-3">
+          <div class="metric-label">Failed rows</div>
+          <div class="metric-value text-danger">{{ commit_result.failed }}</div>
+        </div>
+      </div>
+      <a href="{% url 'webcrm:lead-list' %}" class="btn btn-primary btn-sm">View imported leads</a>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

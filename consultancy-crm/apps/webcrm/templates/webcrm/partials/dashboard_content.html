@@ -1,0 +1,530 @@
+<!-- Section 1: Current Workload Snapshot (Live State) -->
+<div class="crm-section-header">
+  <h2 class="crm-section-title">Current Workload Snapshot</h2>
+  <span class="crm-section-meta">Live database state</span>
+</div>
+
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card metric-card">
+      {% if summary.leads.filtered_employee_leads %}
+        <div>
+          <div class="metric-label">Assigned active leads</div>
+          <div class="metric-value">{{ summary.leads.filtered_employee_leads.assigned_active }}</div>
+        </div>
+        <div class="metric-sub">
+          <span>Archived assigned: <strong class="text-secondary">{{ summary.leads.filtered_employee_leads.assigned_archived }}</strong></span>
+          <span>&middot;</span>
+          <span>Org active: {{ summary.leads.total_active }}</span>
+        </div>
+      {% else %}
+        <div>
+          <div class="metric-label">Active leads</div>
+          <div class="metric-value">{{ summary.leads.total_active }}</div>
+        </div>
+        <div class="metric-sub">
+          <span>Assigned: <strong class="text-secondary">{{ summary.leads.assigned_active }}</strong></span>
+          <span>&middot;</span>
+          <span>Unassigned: <strong class="text-secondary">{{ summary.leads.unassigned_active }}</strong></span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card metric-card">
+      {% if summary.leads.filtered_employee_leads %}
+        <div>
+          <div class="metric-label">Total assigned leads</div>
+          <div class="metric-value">{{ employee_total_leads }}</div>
+        </div>
+        <div class="metric-sub">
+          <span>Archived assigned: <strong class="text-secondary">{{ summary.leads.filtered_employee_leads.assigned_archived }}</strong></span>
+          <span>&middot;</span>
+          <span>Added in period: <strong class="text-secondary">{{ summary.leads.filtered_employee_leads.created_in_period_assigned_to_employee }}</strong></span>
+        </div>
+      {% else %}
+        <div>
+          <div class="metric-label">Total leads</div>
+          <div class="metric-value">{{ total_leads_all|default:summary.leads.total_active }}</div>
+        </div>
+        <div class="metric-sub">
+          <span>Archived: <strong class="text-secondary">{{ summary.leads.total_archived }}</strong></span>
+          <span>&middot;</span>
+          <span>Added in period: <strong class="text-secondary">{{ summary.leads.created_in_period }}</strong></span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card metric-card">
+      <div>
+        <div class="metric-label">Pending follow-ups</div>
+        <div class="metric-value">{{ summary.follow_ups.pending_total }}</div>
+      </div>
+      <div class="metric-sub">
+        <span class="{% if summary.follow_ups.overdue > 0 %}text-danger fw-medium{% endif %}">Overdue: {{ summary.follow_ups.overdue }}</span>
+        <span>&middot;</span>
+        <span>Today: <strong class="text-secondary">{{ summary.follow_ups.due_today }}</strong></span>
+        <span>&middot;</span>
+        <span>Upcoming: {{ summary.follow_ups.upcoming }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card metric-card">
+      <div>
+        <div class="metric-label">{% if summary.workload.filtered_employee_workload %}Calling team (org-wide){% else %}Calling team{% endif %}</div>
+        <div class="metric-value">{{ summary.workload.active_employees }} <span class="small text-muted">/ {{ summary.workload.total_employees }}</span></div>
+      </div>
+      <div class="metric-sub">
+        {% if summary.workload.filtered_employee_workload %}
+          <span>Assignments in period: <strong class="text-secondary">{{ summary.workload.filtered_employee_workload.assignments_changed_in_period }}</strong></span>
+        {% else %}
+          <span>Active callers: <strong class="text-secondary">{{ summary.workload.active_employees }}</strong></span>
+          <span>&middot;</span>
+          <span>Inactive: {{ summary.workload.inactive_employees }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Section 2: Period Calling & Follow-Up Telemetry -->
+<div class="crm-section-header">
+  <h2 class="crm-section-title">Period activity ({{ summary.period.date_from }} to {{ summary.period.date_to }})</h2>
+  <span class="crm-section-meta">{{ summary.period.timezone }}</span>
+</div>
+
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card metric-card">
+      <div>
+        <div class="metric-label">Calls logged in period</div>
+        <div class="metric-value">{{ summary.calls.total_calls }}</div>
+      </div>
+      <div class="metric-sub">
+        <span>Unique leads called: <strong class="text-secondary">{{ summary.calls.unique_leads_called }}</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card metric-card">
+      <div>
+        <div class="metric-label">Talk time in period</div>
+        <div class="metric-value">{{ summary.calls.total_duration_seconds }}s</div>
+      </div>
+      <div class="metric-sub">
+        <span>Average duration: <strong class="text-secondary">{{ summary.calls.average_duration_seconds }}s</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card metric-card">
+      {% if summary.leads.filtered_employee_leads %}
+        <div>
+          <div class="metric-label">New leads in period (assigned)</div>
+          <div class="metric-value">{{ summary.leads.filtered_employee_leads.created_in_period_assigned_to_employee }}</div>
+        </div>
+        <div class="metric-sub">
+          <span>Assigned to caller (Org total: <strong class="text-secondary">{{ summary.leads.created_in_period }}</strong>)</span>
+        </div>
+      {% else %}
+        <div>
+          <div class="metric-label">New leads in period</div>
+          <div class="metric-value">{{ summary.leads.created_in_period }}</div>
+        </div>
+        <div class="metric-sub">
+          <span>Enquiries created during window</span>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card metric-card">
+      <div>
+        <div class="metric-label">Follow-ups completed</div>
+        <div class="metric-value">{{ summary.follow_ups.completed_in_period }}</div>
+      </div>
+      <div class="metric-sub">
+        <span>Scheduled: <strong class="text-secondary">{{ summary.follow_ups.created_in_period }}</strong></span>
+        <span>&middot;</span>
+        <span>Cancelled: {{ summary.follow_ups.cancelled_in_period }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Section 3: Visual Moment — Lead Pipeline Distribution & Call Outcome Share -->
+<div class="row mb-4">
+  <!-- Lead Pipeline Distribution (2/3 width main analytical block) -->
+  <div class="col-lg-7">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div>
+          <div class="card-header-title">Lead pipeline distribution</div>
+          <div class="card-header-sub">
+            {% if summary.leads.filtered_employee_leads %}
+              Active leads assigned to selected employee by lifecycle status
+            {% else %}
+              Active leads grouped by current lifecycle status
+            {% endif %}
+          </div>
+        </div>
+        <a href="{% url 'webcrm:lead-list' %}{% if selected_employee_id %}?assigned_to={{ selected_employee_id }}{% endif %}" class="btn btn-sm btn-outline-secondary">All leads</a>
+      </div>
+      <div class="card-body">
+        {% if summary.leads.filtered_employee_leads %}
+          {% if summary.leads.filtered_employee_leads.assigned_active > 0 %}
+            <div class="crm-pipeline-bar" role="img" aria-label="Employee lead pipeline proportion bar">
+              {% for status_code, active_count in summary.leads.filtered_employee_leads.current_active_by_status.items %}
+                {% if active_count > 0 %}
+                  <div class="crm-pipeline-seg status-{{ status_code }}"
+                       style="width: {% widthratio active_count summary.leads.filtered_employee_leads.assigned_active 100 %}%;"
+                       title="{{ status_code }}: {{ active_count }} assigned active leads"></div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th class="text-end">Assigned active</th>
+                  <th class="text-end">Created in period (org-wide)</th>
+                  <th style="width: 30%;">Share of assigned</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for status_code, active_count in summary.leads.filtered_employee_leads.current_active_by_status.items %}
+                  <tr>
+                    <td>
+                      <a href="{% url 'webcrm:lead-list' %}?status={{ status_code }}&amp;assigned_to={{ selected_employee_id }}" class="badge {% if status_code == 'CONVERTED' %}bg-success{% elif status_code == 'INTERESTED' %}bg-primary{% elif status_code == 'NOT_INTERESTED' %}bg-danger{% elif status_code == 'CONTACTED' %}bg-info{% else %}bg-secondary{% endif %}">
+                        <span class="badge-dot"></span>
+                        <span>{{ status_code }}</span>
+                      </a>
+                    </td>
+                    <td class="text-end fw-medium">{{ active_count }}</td>
+                    <td class="text-end text-muted">
+                      {% for p_code, p_count in summary.leads.created_in_period_by_current_status.items %}
+                        {% if p_code == status_code %}{{ p_count }}{% endif %}
+                      {% endfor %}
+                    </td>
+                    <td>
+                      <div class="trend-bar-track">
+                        {% if summary.leads.filtered_employee_leads.assigned_active > 0 %}
+                          <div class="trend-bar-fill {% if status_code == 'INTERESTED' or status_code == 'CONVERTED' %}is-accent{% endif %}"
+                               style="width: {% widthratio active_count summary.leads.filtered_employee_leads.assigned_active 100 %}%;"></div>
+                        {% else %}
+                          <div class="trend-bar-fill" style="width: 0%;"></div>
+                        {% endif %}
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          {% if summary.leads.total_active > 0 %}
+            <div class="crm-pipeline-bar" role="img" aria-label="Lead pipeline proportion bar">
+              {% for status_code, active_count in summary.leads.current_active_by_status.items %}
+                {% if active_count > 0 %}
+                  <div class="crm-pipeline-seg status-{{ status_code }}"
+                       style="width: {% widthratio active_count summary.leads.total_active 100 %}%;"
+                       title="{{ status_code }}: {{ active_count }} active leads"></div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          <div class="table-responsive">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th class="text-end">Active leads</th>
+                  <th class="text-end">Created in period</th>
+                  <th style="width: 30%;">Share of active</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for status_code, active_count in summary.leads.current_active_by_status.items %}
+                  <tr>
+                    <td>
+                      <a href="{% url 'webcrm:lead-list' %}?status={{ status_code }}" class="badge {% if status_code == 'CONVERTED' %}bg-success{% elif status_code == 'INTERESTED' %}bg-primary{% elif status_code == 'NOT_INTERESTED' %}bg-danger{% elif status_code == 'CONTACTED' %}bg-info{% else %}bg-secondary{% endif %}">
+                        <span class="badge-dot"></span>
+                        <span>{{ status_code }}</span>
+                      </a>
+                    </td>
+                    <td class="text-end fw-medium">{{ active_count }}</td>
+                    <td class="text-end text-muted">
+                      {% for p_code, p_count in summary.leads.created_in_period_by_current_status.items %}
+                        {% if p_code == status_code %}{{ p_count }}{% endif %}
+                      {% endfor %}
+                    </td>
+                    <td>
+                      <div class="trend-bar-track">
+                        {% if summary.leads.total_active > 0 %}
+                          <div class="trend-bar-fill {% if status_code == 'INTERESTED' or status_code == 'CONVERTED' %}is-accent{% endif %}"
+                               style="width: {% widthratio active_count summary.leads.total_active 100 %}%;"></div>
+                        {% else %}
+                          <div class="trend-bar-fill" style="width: 0%;"></div>
+                        {% endif %}
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Call Outcome Breakdown & Daily Trend (1/3 width companion panel) -->
+  <div class="col-lg-5">
+    <div class="card" style="height: 100%;">
+      <div class="card-header">
+        <div>
+          <div class="card-header-title">Calls by outcome snapshot</div>
+          <div class="card-header-sub">Immutable outcome snapshots in period</div>
+        </div>
+        <a href="{% url 'webcrm:call-list' %}" class="btn btn-sm btn-outline-secondary">Call history</a>
+      </div>
+      <div class="card-body">
+        {% if summary.calls.by_outcome %}
+          <div class="table-responsive mb-3">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Outcome</th>
+                  <th class="text-end">Calls</th>
+                  <th class="text-end">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in summary.calls.by_outcome %}
+                  <tr>
+                    <td>
+                      <div class="fw-medium">{{ row.outcome_label }}</div>
+                      <div class="font-monospace text-muted">{{ row.outcome_code }}</div>
+                    </td>
+                    <td class="text-end fw-medium">{{ row.count }}</td>
+                    <td class="text-end text-muted font-monospace">
+                      {% if summary.calls.total_calls > 0 %}
+                        {% widthratio row.count summary.calls.total_calls 100 %}%
+                      {% else %}
+                        0%
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          {% include "webcrm/partials/empty_state.html" with icon="phone-call" title="No calls in selected period" description="Logged calls from the employee calling app will appear here." %}
+        {% endif %}
+
+        {% if summary.calls.daily_trends %}
+          <div class="pt-2" style="border-top: 1px solid var(--crm-border);">
+            <div class="small fw-medium mb-2 text-secondary">Daily call volume (IST)</div>
+            <div class="table-responsive">
+              <table class="table">
+                <tbody>
+                  {% for day in summary.calls.daily_trends %}
+                    <tr>
+                      <td class="font-monospace text-muted" style="padding: 6px 8px;">{{ day.date }}</td>
+                      <td class="text-end fw-medium" style="padding: 6px 8px; width: 60px;">{{ day.total_calls }}</td>
+                      <td style="padding: 6px 8px; width: 45%;">
+                        <div class="trend-bar-track">
+                          <div class="trend-bar-fill is-accent" style="width: {% widthratio day.total_calls max_daily_calls 100 %}%;"></div>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Section 4: Employee Workload & Period Performance Table -->
+<div class="card mb-4">
+  <div class="card-header">
+    <div>
+      <div class="card-header-title">Employee workload &amp; performance</div>
+      <div class="card-header-sub">Active queue assignment and period call output per caller</div>
+    </div>
+    <a href="{% url 'webcrm:employee-list' %}" class="btn btn-sm btn-outline-secondary">Manage team</a>
+  </div>
+  <div class="card-body-flush">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Status</th>
+            <th class="text-end">Assigned leads</th>
+            <th class="text-end">Calls (period)</th>
+            <th class="text-end">Talk time</th>
+            <th class="text-end">Pending follow-ups</th>
+            <th class="text-end">Overdue</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp in employee_performance %}
+            <tr>
+              <td>
+                <a href="{% url 'webcrm:employee-detail' emp.id %}" class="fw-medium">{{ emp.username }}</a>
+                <div class="small text-muted">{{ emp.get_full_name|default:emp.username }}</div>
+              </td>
+              <td>
+                {% if emp.is_active %}
+                  <span class="badge bg-success"><span class="badge-dot"></span>Active</span>
+                {% else %}
+                  <span class="badge bg-secondary"><span class="badge-dot"></span>Inactive</span>
+                {% endif %}
+              </td>
+              <td class="text-end">{{ emp.assigned_active_leads_count }}</td>
+              <td class="text-end fw-medium">{{ emp.calls_count }}</td>
+              <td class="text-end text-muted">{{ emp.total_call_duration_seconds }}s</td>
+              <td class="text-end">{{ emp.pending_followups_count }}</td>
+              <td class="text-end {% if emp.overdue_followups_count > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                {{ emp.overdue_followups_count }}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7">
+                {% include "webcrm/partials/empty_state.html" with icon="user-check" title="No calling employees found" description="Create an employee account to begin assigning leads." %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Section 5: Recent Call Activity & Recent Leads -->
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-header-title">Recent call activity</div>
+          <div class="card-header-sub">Latest calls submitted by employees</div>
+        </div>
+        <a href="{% url 'webcrm:call-list' %}" class="btn btn-sm btn-outline-secondary">View all</a>
+      </div>
+      <div class="card-body-flush">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Lead</th>
+                <th>Caller</th>
+                <th>Outcome</th>
+                <th class="text-end">Duration</th>
+                <th class="text-end">Time (IST)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for call in recent_calls %}
+                <tr>
+                  <td>
+                    <a href="{% url 'webcrm:lead-detail' call.lead.id %}" class="fw-medium">{{ call.lead.name }}</a>
+                    <div class="font-monospace text-muted">{{ call.lead.phone }}</div>
+                  </td>
+                  <td class="small">{{ call.caller_username_snapshot }}</td>
+                  <td>
+                    <a href="{% url 'webcrm:call-detail' call.id %}" class="badge bg-info">
+                      <span class="badge-dot"></span>{{ call.outcome_label_snapshot }}
+                    </a>
+                  </td>
+                  <td class="text-end font-monospace">{{ call.duration_seconds }}s</td>
+                  <td class="text-end font-monospace text-muted">{{ call.started_at|date:"d M, H:i" }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5">
+                    {% include "webcrm/partials/empty_state.html" with icon="phone-call" title="No calls recorded yet" description="Calls submitted from the mobile caller app will appear here." %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-header-title">Recent leads</div>
+          <div class="card-header-sub">Latest active student enquiries</div>
+        </div>
+        <a href="{% url 'webcrm:lead-list' %}" class="btn btn-sm btn-outline-secondary">View all</a>
+      </div>
+      <div class="card-body-flush">
+        <div class="table-responsive">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Course interest</th>
+                <th>Status</th>
+                <th>Assignee</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for lead in recent_leads %}
+                <tr>
+                  <td>
+                    <a href="{% url 'webcrm:lead-detail' lead.id %}" class="fw-medium">{{ lead.name }}</a>
+                    <div class="font-monospace text-muted">{{ lead.phone }}</div>
+                  </td>
+                  <td class="small text-secondary">{{ lead.course_interest|default:"General enquiry" }}</td>
+                  <td>
+                    <span class="badge {% if lead.status == 'CONVERTED' %}bg-success{% elif lead.status == 'INTERESTED' %}bg-primary{% elif lead.status == 'NOT_INTERESTED' %}bg-danger{% elif lead.status == 'CONTACTED' %}bg-info{% else %}bg-secondary{% endif %}">
+                      <span class="badge-dot"></span>{{ lead.get_status_display }}
+                    </span>
+                  </td>
+                  <td class="small">
+                    {% if lead.assigned_to %}
+                      <a href="{% url 'webcrm:employee-detail' lead.assigned_to.id %}">{{ lead.assigned_to.username }}</a>
+                    {% else %}
+                      <span class="text-muted">Unassigned</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4">
+                    {% include "webcrm/partials/empty_state.html" with icon="users" title="No active leads yet" description="Add a lead or import a spreadsheet to populate the queue." %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

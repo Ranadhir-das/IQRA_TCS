@@ -1,0 +1,153 @@
+<form method="post" action="{% url 'webcrm:lead-bulk-assign' %}">
+  {% csrf_token %}
+  <!-- Atomic Bulk Assignment Toolbar -->
+  <div class="crm-bulk-toolbar">
+    <div class="d-flex align-items-center gap-2">
+      <span class="fw-medium">Bulk queue assignment</span>
+      <span id="bulk-selected-count" class="crm-mono-tag">0 selected</span>
+      <span class="small text-muted">Select active leads below to assign or unassign atomically</span>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <select name="employee_id" class="form-select" style="width: auto; min-width: 220px;" aria-label="Target employee for bulk assignment">
+        <option value="unassign">— Unassign selected leads —</option>
+        {% for emp in active_employees %}
+          <option value="{{ emp.id }}">Assign to: {{ emp.username }} ({{ emp.get_full_name|default:emp.username }})</option>
+        {% endfor %}
+      </select>
+      <input type="text" name="reason" class="form-control" style="width: 220px;" placeholder="Assignment reason (optional)">
+      <button type="submit" class="btn btn-primary btn-sm"
+              data-confirm="Apply bulk assignment to the selected leads?">
+        <span>Apply assignment</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Leads Data Table -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-title">
+        <span>Lead directory</span>
+        <span class="crm-mono-tag">{{ page_obj.paginator.count }} total</span>
+      </div>
+      <div class="card-header-sub font-monospace">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+      </div>
+    </div>
+
+    <div class="card-body-flush">
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width: 40px;">
+                <input type="checkbox" id="select-all-leads" class="form-check-input" title="Select all active leads on page" aria-label="Select all active leads on page">
+              </th>
+              <th>Student</th>
+              <th>Phone</th>
+              <th>Course interest</th>
+              <th>Status</th>
+              <th>Assigned to</th>
+              <th>Created (IST)</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for lead in page_obj.object_list %}
+              <tr>
+                <td>
+                  <input type="checkbox" name="lead_ids" value="{{ lead.id }}"
+                         class="form-check-input lead-row-checkbox"
+                         aria-label="Select {{ lead.name }}"
+                         {% if lead.is_archived %}disabled title="Archived leads cannot be bulk assigned"{% endif %}>
+                </td>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    <a href="{% url 'webcrm:lead-detail' lead.id %}" class="fw-medium">{{ lead.name }}</a>
+                    {% if lead.is_archived %}
+                      <span class="badge bg-warning">Archived</span>
+                    {% endif %}
+                  </div>
+                  {% if lead.email %}
+                    <div class="small text-muted">{{ lead.email }}</div>
+                  {% endif %}
+                </td>
+                <td class="font-monospace">
+                  <div>{{ lead.phone }}</div>
+                  {% if lead.alternate_phone %}
+                    <div class="small text-muted">Alt: {{ lead.alternate_phone }}</div>
+                  {% endif %}
+                </td>
+                <td class="text-secondary">{{ lead.course_interest|default:"—" }}</td>
+                <td>
+                  {% if lead.status == 'CONVERTED' %}
+                    <span class="badge bg-success"><span class="badge-dot"></span>{{ lead.get_status_display }}</span>
+                  {% elif lead.status == 'INTERESTED' %}
+                    <span class="badge bg-primary"><span class="badge-dot"></span>{{ lead.get_status_display }}</span>
+                  {% elif lead.status == 'NOT_INTERESTED' %}
+                    <span class="badge bg-danger"><span class="badge-dot"></span>{{ lead.get_status_display }}</span>
+                  {% elif lead.status == 'CONTACTED' %}
+                    <span class="badge bg-info"><span class="badge-dot"></span>{{ lead.get_status_display }}</span>
+                  {% else %}
+                    <span class="badge bg-secondary"><span class="badge-dot"></span>{{ lead.get_status_display }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if lead.assigned_to %}
+                    <a href="{% url 'webcrm:employee-detail' lead.assigned_to.id %}" class="fw-medium">{{ lead.assigned_to.username }}</a>
+                    {% if not lead.assigned_to.is_active %}
+                      <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted">Unassigned</span>
+                  {% endif %}
+                </td>
+                <td class="font-monospace text-muted">{{ lead.created_at|date:"Y-m-d H:i" }}</td>
+                <td class="text-end">
+                  <div class="d-inline-flex gap-1">
+                    <a href="{% url 'webcrm:lead-detail' lead.id %}" class="btn btn-sm btn-outline-secondary">View</a>
+                    <a href="{% url 'webcrm:lead-edit' lead.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="8">
+                  {% include "webcrm/partials/empty_state.html" with icon="users" title="No leads match the current filters" description="Try clearing the search query or adjusting the status and assignment filters." %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+      <div class="crm-pagination-bar">
+        <span class="small text-muted tabular-nums">
+          Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} leads
+        </span>
+        <ul class="pagination">
+          {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.previous_page_number }}&amp;search={{ filters.search|urlencode }}&amp;status={{ filters.status|urlencode }}&amp;assigned_to={{ filters.assigned_to|default:'' }}&amp;unassigned={{ filters.unassigned|urlencode }}&amp;archived={{ filters.archived|urlencode }}">
+                {% include "webcrm/partials/icon.html" with name="chevron-left" size="14" %}
+                <span>Previous</span>
+              </a>
+            </li>
+          {% endif %}
+          <li class="page-item active">
+            <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+          </li>
+          {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.next_page_number }}&amp;search={{ filters.search|urlencode }}&amp;status={{ filters.status|urlencode }}&amp;assigned_to={{ filters.assigned_to|default:'' }}&amp;unassigned={{ filters.unassigned|urlencode }}&amp;archived={{ filters.archived|urlencode }}">
+                <span>Next</span>
+                {% include "webcrm/partials/icon.html" with name="chevron-right" size="14" %}
+              </a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+</form>

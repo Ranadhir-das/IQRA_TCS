@@ -1,0 +1,123 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administrator Sign In — IQRA TCS CRM</title>
+  <link rel="stylesheet" href="{% static 'webcrm/css/crm.css' %}">
+</head>
+<body>
+  <div class="crm-login-wrapper">
+    <div class="crm-login-shell">
+      <!-- Left Operational Brand Panel -->
+      <div class="crm-login-aside">
+        <div>
+          <div class="d-flex align-items-center gap-3">
+            <span class="crm-brand-mark">IQ</span>
+            <div>
+              <div class="crm-brand-title">IQRA TCS CRM</div>
+              <div class="crm-brand-sub">iqracentral.com</div>
+            </div>
+          </div>
+
+          <h2 class="crm-login-aside-title">
+            Admissions &amp; tele-counseling operations console
+          </h2>
+          <p class="crm-login-aside-desc">
+            Centralized workspace for managing student enquiries, assigning calling queues, auditing call outcomes, and exporting IST performance reports.
+          </p>
+
+          <!-- Real Product Material Preview -->
+          <div class="crm-login-PreviewCard">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span class="small" style="color: #a3a9b8;">Queue telemetry</span>
+              <span class="font-monospace" style="font-size: 11px; color: #2dd4bf;">
+                <span class="crm-live-dot" style="margin-right: 4px;"></span>Asia/Kolkata &middot; IST
+              </span>
+            </div>
+            <div class="d-flex align-items-center justify-content-between py-1" style="border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; margin-bottom: 8px;">
+              <span style="font-size: 12.5px; color: #eef0f5;">Call outcome snapshots</span>
+              <span class="font-monospace" style="font-size: 12px; color: #a3a9b8;">Immutable audit</span>
+            </div>
+            <div class="d-flex align-items-center justify-content-between">
+              <span style="font-size: 12.5px; color: #eef0f5;">Caller app sync</span>
+              <span class="font-monospace" style="font-size: 12px; color: #a3a9b8;">/api/v1/</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="small" style="color: #7a8296; margin-top: 24px;">
+          Restricted to authorized active administrators. Employee callers sign in through the IQRA TCS Android app.
+        </div>
+      </div>
+
+      <!-- Right Sign-In Form Panel -->
+      <div class="crm-login-card">
+        <div class="mb-4">
+          <h1 style="font-size: 22px; line-height: 28px; font-weight: 500;">Sign in to administration</h1>
+          <p class="text-muted small mb-0 mt-1">Enter your administrator credentials to access the workspace</p>
+        </div>
+
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }}">
+              {% include "webcrm/partials/icon.html" with name="info" %}
+              <div>{{ message }}</div>
+            </div>
+          {% endfor %}
+        {% endif %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger" role="alert">
+            {% include "webcrm/partials/icon.html" with name="alert-triangle" %}
+            <div>
+              {% for err in form.non_field_errors %}
+                <div>{{ err }}</div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'webcrm:login' %}" novalidate>
+          {% csrf_token %}
+          {% if next %}
+            <input type="hidden" name="next" value="{{ next }}">
+          {% endif %}
+
+          <div class="mb-3">
+            <label for="id_username" class="form-label">Administrator username</label>
+            {{ form.username }}
+            {% if form.username.errors %}
+              <div class="text-danger small mt-1">{{ form.username.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-4">
+            <label for="id_password" class="form-label">Password</label>
+            <div class="crm-input-with-action">
+              {{ form.password }}
+              <button type="button"
+                      class="crm-input-toggle-btn"
+                      data-toggle-password="id_password"
+                      aria-label="Show password"
+                      title="Show password">
+                {% include "webcrm/partials/icon.html" with name="eye" size="16" %}
+              </button>
+            </div>
+            {% if form.password.errors %}
+              <div class="text-danger small mt-1">{{ form.password.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+            <span>Sign in</span>
+            {% include "webcrm/partials/icon.html" with name="chevron-right" size="16" %}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script src="{% static 'webcrm/js/crm.js' %}"></script>
+</body>
+</html>

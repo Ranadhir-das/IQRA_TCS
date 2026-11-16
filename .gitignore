@@ -1,0 +1,65 @@
+# ─── Environment & Secrets (NEVER commit) ─────────────────────────────────────
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+local_settings.py
+**/local_settings.py
+
+# ─── Private Keys, Keystores & Service Accounts ──────────────────────────────
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+*service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# ─── Python / Django (consultancy-crm) ───────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.venv/
+venv/
+env/
+*.log
+db.sqlite3
+media/
+staticfiles/
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# ─── Node / Expo / React Native (caller-app) ─────────────────────────────────
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+caller-app/android/
+caller-app/ios/
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.tsbuildinfo
+*.apk
+*.aab
+
+# ─── OS & Editor Artifacts ───────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

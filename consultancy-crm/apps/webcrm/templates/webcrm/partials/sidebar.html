@@ -1,9 +1,16 @@
+{% load static %}
 {% with current_url=request.resolver_match.url_name %}
 <aside id="crm-sidebar" class="crm-sidebar" aria-label="Primary CRM navigation">
   <!-- Brand Header -->
   <div class="crm-brand">
     <a href="{% url 'webcrm:dashboard' %}" class="crm-brand-link" title="IQRA TCS Calling CRM">
-      <span class="crm-brand-mark">IQ</span>
+      <span class="crm-brand-logo-wrap">
+        <img src="{% static 'webcrm/images/logo.png' %}?v=20261117"
+             alt="IQRA TCS official logo"
+             class="crm-brand-logo"
+             width="34"
+             height="34">
+      </span>
       <span class="crm-brand-copy">
         <span class="crm-brand-title">IQRA TCS CRM</span>
         <span class="crm-brand-sub">Calling &amp; Admissions</span>

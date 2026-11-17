@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandLogo } from '../../components/BrandLogo.tsx';
 import { ErrorBanner } from '../../components/ErrorBanner.tsx';
 import { LeadStatusBadge } from '../../components/LeadStatusBadge.tsx';
 import { APP_NAME } from '../../constants/config.ts';
@@ -162,9 +163,12 @@ export default function EmployeeHomeScreen() {
         }
       >
         <View style={styles.topBar}>
-          <View>
-            <Text style={styles.appBrandText}>{APP_NAME}</Text>
-            <Text style={styles.greetingText}>{getTimeOfDayGreeting()}</Text>
+          <View style={styles.brandRow}>
+            <BrandLogo size={42} accessibilityLabel="IQRA TCS logo" />
+            <View>
+              <Text style={styles.appBrandText}>{APP_NAME}</Text>
+              <Text style={styles.greetingText}>{getTimeOfDayGreeting()}</Text>
+            </View>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -462,6 +466,11 @@ const createStyles = (colors: AppColors) =>
       alignItems: 'center',
       justifyContent: 'space-between',
       marginBottom: 16,
+    },
+    brandRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
     },
     appBrandText: {
       fontSize: 12,

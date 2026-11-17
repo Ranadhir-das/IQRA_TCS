@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandLogo } from '../../components/BrandLogo.tsx';
 import { API_BASE_URL, APP_ENV, APP_NAME } from '../../constants/config.ts';
 import type { AppColors } from '../../constants/theme.ts';
 import { useAppStyles, useAppTheme } from '../../context/AppThemeContext.tsx';
@@ -210,7 +211,10 @@ export default function EmployeeAccountScreen() {
 
         {/* Application Metadata */}
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionCardTitle}>Application Info</Text>
+          <View style={styles.appInfoBrandHeader}>
+            <BrandLogo size={36} accessibilityLabel="IQRA TCS logo" />
+            <Text style={styles.sectionCardTitleNoMargin}>Application Info</Text>
+          </View>
           <ProfileDetailRow label="App" value={APP_NAME} colors={colors} />
           <ProfileDetailRow
             label="Environment"
@@ -336,6 +340,17 @@ const createStyles = (colors: AppColors) =>
       fontWeight: '700',
       color: colors.text,
       marginBottom: 6,
+    },
+    appInfoBrandHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 6,
+    },
+    sectionCardTitleNoMargin: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
     },
     preferenceRow: {
       flexDirection: 'row',

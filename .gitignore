@@ -40,7 +40,10 @@ htmlcov/
 .tox/
 
 # ─── Node / Expo / React Native (caller-app) ─────────────────────────────────
+node_modules
 node_modules/
+**/node_modules
+**/node_modules/
 .expo/
 dist/
 web-build/

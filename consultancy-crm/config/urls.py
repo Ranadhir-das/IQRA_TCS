@@ -4,12 +4,21 @@ from django.conf import settings
 from django.contrib import admin
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from django.urls import include, path
+from django.views.generic.base import RedirectView
 
 admin.site.site_header = "IQRA TCS Admin"
 admin.site.site_title = "IQRA TCS"
 admin.site.index_title = "Administration"
 
 urlpatterns = [
+    path(
+        "favicon.ico",
+        RedirectView.as_view(
+            url=f"{settings.STATIC_URL}webcrm/images/favicon.ico?v=20261117",
+            permanent=False,
+        ),
+        name="favicon",
+    ),
     # Django admin — maintenance interface only (not the IQRA web CRM interface)
     path("admin/", admin.site.urls),
 

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
+  ANDROID_PACKAGE_ID,
+  APP_NAME,
   DEFAULT_DEVELOPMENT_API_BASE_URL,
   DEFAULT_PRODUCTION_API_BASE_URL,
   resolveApiBaseUrl,
@@ -99,6 +105,141 @@ describe('Phase 1 — API Configuration', () => {
       EXPO_PUBLIC_API_BASE_URL: 'http://127.0.0.1:8000/api/v1',
     });
     assert.equal(url, 'http://127.0.0.1:8000/api/v1');
+  });
+
+  it('rejects localhost, emulator (10.0.2.2), and developer LAN URLs in production mode', () => {
+    const forbiddenProductionUrls = [
+      'https://192.168.1.42:8000/api/v1',
+      'https://10.0.2.2:8000/api/v1',
+      'https://172.16.0.10:8000/api/v1',
+      'https://127.0.0.1:8000/api/v1',
+      'https://localhost:8000/api/v1',
+      'https://devbox.local/api/v1',
+    ];
+    for (const badUrl of forbiddenProductionUrls) {
+      assert.throws(
+        () =>
+          resolveApiBaseUrl({
+            APP_ENV: 'production',
+            EXPO_PUBLIC_API_BASE_URL: badUrl,
+          }),
+        /Production builds cannot target localhost, emulator, or private LAN hosts/
+      );
+    }
+  });
+
+  it('preserves Android package ID com.iqracentral.tcs.caller and app name IQRA TCS in both development and production Expo configurations', () => {
+    const requireCjs = createRequire(import.meta.url);
+    const appJson = requireCjs('../../app.json') as {
+      expo: {
+        name: string;
+        icon: string;
+        android: {
+          package: string;
+          adaptiveIcon: {
+            backgroundColor: string;
+            foregroundImage: string;
+            backgroundImage: string;
+            monochromeImage: string;
+          };
+        };
+        plugins: (string | [string, Record<string, unknown>])[];
+      };
+    };
+    const buildExpoConfig = requireCjs('../../app.config.js') as (ctx: {
+      config?: Record<string, unknown>;
+    }) => {
+      name: string;
+      android: { package: string };
+      extra: { appEnv: string; apiBaseUrl: string; productionApiBaseUrl: string };
+    };
+
+    assert.equal(APP_NAME, 'IQRA TCS');
+    assert.equal(ANDROID_PACKAGE_ID, 'com.iqracentral.tcs.caller');
+    assert.equal(appJson.expo.name, 'IQRA TCS');
+    assert.equal(appJson.expo.android.package, 'com.iqracentral.tcs.caller');
+    assert.equal(appJson.expo.icon, './assets/images/icon.png');
+    assert.equal(appJson.expo.android.adaptiveIcon.backgroundColor, '#FFFFFF');
+    assert.equal(
+      appJson.expo.android.adaptiveIcon.foregroundImage,
+      './assets/images/android-icon-foreground.png'
+    );
+    assert.equal(
+      appJson.expo.android.adaptiveIcon.backgroundImage,
+      './assets/images/android-icon-background.png'
+    );
+    assert.equal(
+      appJson.expo.android.adaptiveIcon.monochromeImage,
+      './assets/images/android-icon-monochrome.png'
+    );
+
+    const splashPlugin = appJson.expo.plugins.find(
+      (p): p is [string, Record<string, unknown>] =>
+        Array.isArray(p) && p[0] === 'expo-splash-screen'
+    );
+    assert.ok(splashPlugin, 'expo-splash-screen plugin must be configured');
+    assert.equal(splashPlugin[1].image, './assets/images/splash-icon.png');
+    assert.equal(splashPlugin[1].backgroundColor, '#FFFFFF');
+    assert.equal(splashPlugin[1].imageWidth, 160);
+
+    const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+    const requiredAssets = [
+      'assets/images/icon.png',
+      'assets/images/android-icon-foreground.png',
+      'assets/images/android-icon-background.png',
+      'assets/images/android-icon-monochrome.png',
+      'assets/images/splash-icon.png',
+      'assets/images/brand-logo.png',
+    ];
+    for (const relPath of requiredAssets) {
+      const fullPath = path.join(projectRoot, relPath);
+      assert.equal(fs.existsSync(fullPath), true, `Missing asset: ${relPath}`);
+      const buf = fs.readFileSync(fullPath);
+      assert.ok(buf.length > 500, `Asset ${relPath} is unexpectedly small`);
+      assert.equal(
+        buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+        true,
+        `Asset ${relPath} is not a valid PNG`
+      );
+    }
+
+    const prevAppEnv = process.env.APP_ENV;
+    const prevPublicAppEnv = process.env.EXPO_PUBLIC_APP_ENV;
+    const prevApiUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+    try {
+      process.env.APP_ENV = 'development';
+      process.env.EXPO_PUBLIC_APP_ENV = 'development';
+      delete process.env.EXPO_PUBLIC_API_BASE_URL;
+      const devConfig = buildExpoConfig({ config: appJson.expo });
+
+      process.env.APP_ENV = 'production';
+      process.env.EXPO_PUBLIC_APP_ENV = 'production';
+      delete process.env.EXPO_PUBLIC_API_BASE_URL;
+      const prodConfig = buildExpoConfig({ config: appJson.expo });
+
+      assert.equal(devConfig.name, 'IQRA TCS');
+      assert.equal(prodConfig.name, 'IQRA TCS');
+      assert.equal(devConfig.android.package, 'com.iqracentral.tcs.caller');
+      assert.equal(prodConfig.android.package, 'com.iqracentral.tcs.caller');
+      assert.equal(devConfig.android.package, prodConfig.android.package);
+      assert.equal(devConfig.extra.appEnv, 'development');
+      assert.equal(devConfig.extra.apiBaseUrl, DEFAULT_DEVELOPMENT_API_BASE_URL);
+      assert.equal(prodConfig.extra.appEnv, 'production');
+      assert.equal(prodConfig.extra.apiBaseUrl, DEFAULT_PRODUCTION_API_BASE_URL);
+
+      process.env.EXPO_PUBLIC_API_BASE_URL = 'https://10.0.2.2:8000/api/v1';
+      assert.throws(
+        () => buildExpoConfig({ config: appJson.expo }),
+        /Production builds cannot target localhost, emulator, or private LAN hosts/
+      );
+    } finally {
+      if (prevAppEnv === undefined) delete process.env.APP_ENV;
+      else process.env.APP_ENV = prevAppEnv;
+      if (prevPublicAppEnv === undefined) delete process.env.EXPO_PUBLIC_APP_ENV;
+      else process.env.EXPO_PUBLIC_APP_ENV = prevPublicAppEnv;
+      if (prevApiUrl === undefined) delete process.env.EXPO_PUBLIC_API_BASE_URL;
+      else process.env.EXPO_PUBLIC_API_BASE_URL = prevApiUrl;
+    }
   });
 });
 

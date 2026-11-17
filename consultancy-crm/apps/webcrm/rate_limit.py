@@ -139,11 +139,16 @@ def parse_trusted_proxy_networks(
     networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
     for entry in items:
         try:
-            networks.append(ipaddress.ip_network(entry, strict=False))
+            net = ipaddress.ip_network(entry, strict=False)
         except ValueError as exc:
             raise RateLimitConfigurationError(
                 f"Invalid IP or CIDR in CRM_TRUSTED_PROXY_IPS: {entry!r}."
             ) from exc
+        if net.prefixlen == 0 or net.network_address.is_unspecified:
+            raise RateLimitConfigurationError(
+                f"Wildcard or unspecified network {entry!r} is not permitted in CRM_TRUSTED_PROXY_IPS."
+            )
+        networks.append(net)
     return tuple(networks)
 
 
@@ -260,6 +265,127 @@ def validate_login_rate_limit_settings(
         resolved_max_ip_attempts,
         resolved_window_seconds,
     )
+
+
+def resolve_secure_proxy_ssl_header(
+    *,
+    trust_x_forwarded_proto: bool = False,
+    trusted_proxies=None,
+) -> tuple[str, str] | None:
+    """
+    Resolve ``SECURE_PROXY_SSL_HEADER`` safely.
+
+    ``X-Forwarded-Proto`` is ONLY trusted when ``trust_x_forwarded_proto=True``
+    AND at least one valid proxy IP/CIDR is configured in ``CRM_TRUSTED_PROXY_IPS``.
+    Raises ``RateLimitConfigurationError`` (``ImproperlyConfigured``) if
+    ``trust_x_forwarded_proto=True`` is enabled without ``CRM_TRUSTED_PROXY_IPS``.
+    """
+    networks = parse_trusted_proxy_networks(trusted_proxies)
+    if not trust_x_forwarded_proto:
+        return None
+    if not networks:
+        raise RateLimitConfigurationError(
+            "CRM_TRUST_X_FORWARDED_PROTO=True requires at least one trusted reverse-proxy "
+            "IP or CIDR in CRM_TRUSTED_PROXY_IPS."
+        )
+    return ("HTTP_X_FORWARDED_PROTO", "https")
+
+
+def validate_production_security_settings(
+    *,
+    debug: bool = False,
+    secure_ssl_redirect: bool = False,
+    secure_hsts_seconds: int = 0,
+    trust_x_forwarded_proto: bool = False,
+    trusted_proxies=None,
+    csrf_trusted_origins=(),
+    cors_allow_all_origins: bool = False,
+) -> None:
+    """
+    Validate HTTPS, HSTS, reverse-proxy header trust, CSRF origins, and CORS settings.
+
+    - Prevents enabling HSTS (``SECURE_HSTS_SECONDS > 0``) unless HTTPS redirection
+      or verified reverse-proxy TLS termination is active.
+    - Prevents trusting ``X-Forwarded-Proto`` without explicit ``CRM_TRUSTED_PROXY_IPS``.
+    - Validates ``CSRF_TRUSTED_ORIGINS`` scheme prefixes.
+    - Prevents ``CORS_ALLOW_ALL_ORIGINS=True`` when ``DEBUG=False`` and HTTPS is enforced.
+    """
+    if isinstance(secure_hsts_seconds, bool) or not isinstance(secure_hsts_seconds, int):
+        raise RateLimitConfigurationError("SECURE_HSTS_SECONDS must be an integer >= 0.")
+    if secure_hsts_seconds < 0:
+        raise RateLimitConfigurationError("SECURE_HSTS_SECONDS must be >= 0.")
+
+    resolve_secure_proxy_ssl_header(
+        trust_x_forwarded_proto=trust_x_forwarded_proto,
+        trusted_proxies=trusted_proxies,
+    )
+
+    if secure_hsts_seconds > 0 and not (secure_ssl_redirect or trust_x_forwarded_proto):
+        raise RateLimitConfigurationError(
+            "SECURE_HSTS_SECONDS > 0 requires SECURE_SSL_REDIRECT=True or "
+            "CRM_TRUST_X_FORWARDED_PROTO=True with CRM_TRUSTED_PROXY_IPS."
+        )
+
+    for origin in csrf_trusted_origins or ():
+        if not isinstance(origin, str) or not (
+            origin.startswith("https://") or origin.startswith("http://")
+        ):
+            raise RateLimitConfigurationError(
+                f"Invalid origin in CSRF_TRUSTED_ORIGINS: {origin!r}. "
+                "Origins must include scheme (e.g. 'https://iqracentral.com')."
+            )
+        if not debug and secure_ssl_redirect and not origin.startswith("https://"):
+            raise RateLimitConfigurationError(
+                f"Non-HTTPS origin {origin!r} in CSRF_TRUSTED_ORIGINS is not permitted "
+                "when DEBUG=False and SECURE_SSL_REDIRECT=True."
+            )
+
+    if not debug and secure_ssl_redirect and cors_allow_all_origins:
+        raise RateLimitConfigurationError(
+            "CORS_ALLOW_ALL_ORIGINS=True is not permitted in production when "
+            "DEBUG=False and SECURE_SSL_REDIRECT=True."
+        )
+
+
+def is_trusted_proxy_remote_addr(
+    raw_remote_addr,
+    *,
+    trusted_proxies=None,
+) -> bool:
+    """Return True only when ``raw_remote_addr`` is a valid IP in ``CRM_TRUSTED_PROXY_IPS``."""
+    if not isinstance(raw_remote_addr, str) or not raw_remote_addr.strip():
+        return False
+    try:
+        remote_ip = ipaddress.ip_address(raw_remote_addr.strip())
+        proxy_networks = parse_trusted_proxy_networks(trusted_proxies)
+    except (ValueError, RateLimitConfigurationError):
+        return False
+    return bool(proxy_networks and _ip_in_networks(remote_ip, proxy_networks))
+
+
+class TrustedProxyHeaderMiddleware:
+    """
+    Sanitize reverse-proxy forwarding headers before ``SecurityMiddleware`` executes.
+
+    Ensures ``HTTP_X_FORWARDED_PROTO`` is only honored when
+    ``CRM_TRUST_X_FORWARDED_PROTO=True`` AND the immediate peer ``REMOTE_ADDR``
+    belongs to ``CRM_TRUSTED_PROXY_IPS``. Arbitrary clients connecting from
+    untrusted IPs cannot spoof ``X-Forwarded-Proto: https``.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if "HTTP_X_FORWARDED_PROTO" in request.META:
+            trust_proto = bool(
+                getattr(settings, "CRM_TRUST_X_FORWARDED_PROTO", False)
+            )
+            if not trust_proto or not is_trusted_proxy_remote_addr(
+                request.META.get("REMOTE_ADDR")
+            ):
+                request.META.pop("HTTP_X_FORWARDED_PROTO", None)
+        return self.get_response(request)
 
 
 def _is_missing_table_error(exc: DatabaseError, table_name: str) -> bool:

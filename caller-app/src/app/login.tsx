@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandLogo } from '../components/BrandLogo.tsx';
 import { ErrorBanner } from '../components/ErrorBanner.tsx';
 import { KeyboardAwareContainer } from '../components/KeyboardAwareContainer.tsx';
 import { PasswordInput } from '../components/PasswordInput.tsx';
@@ -76,9 +77,11 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAwareContainer contentContainerStyle={styles.scrollContent}>
         <View style={styles.headerSection}>
-          <View style={styles.logoMark}>
-            <Text style={styles.logoMarkText}>IQRA</Text>
-          </View>
+          <BrandLogo
+            size={88}
+            accessibilityLabel="IQRA TCS official logo"
+            style={styles.logoBadge}
+          />
           <Text style={styles.brandTitle}>{APP_NAME}</Text>
           <Text style={styles.brandSubtitle}>{APP_SUBTITLE}</Text>
           <View style={styles.rolePill}>
@@ -215,22 +218,8 @@ const createStyles = (colors: AppColors) =>
       alignItems: 'center',
       marginBottom: 24,
     },
-    logoMark: {
-      width: 68,
-      height: 68,
-      borderRadius: 18,
-      backgroundColor: colors.primaryDark,
-      alignItems: 'center',
-      justifyContent: 'center',
+    logoBadge: {
       marginBottom: 12,
-      borderWidth: 2,
-      borderColor: colors.primary,
-    },
-    logoMarkText: {
-      color: '#FFFFFF',
-      fontSize: 19,
-      fontWeight: '800',
-      letterSpacing: 1.2,
     },
     brandTitle: {
       fontSize: 26,

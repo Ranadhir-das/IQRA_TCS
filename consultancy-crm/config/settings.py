@@ -55,6 +55,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "apps.webcrm.rate_limit.TrustedProxyHeaderMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "apps.leads.middleware.LeadImportUploadLimitMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -89,10 +90,14 @@ WSGI_APPLICATION = "config.wsgi.application"
 # ─── Database ─────────────────────────────────────────────────────────────────
 # Always use a fresh, independent IQRA database — never Vaani's.
 DATABASES = {
-    "default": env.db(
-        "DATABASE_URL",
-        default="postgres://apple@localhost:5432/iqra_tcs_crm",
-    )
+    "default": {
+        **env.db(
+            "DATABASE_URL",
+            default="postgres://apple@localhost:5432/iqra_tcs_crm",
+        ),
+        "CONN_MAX_AGE": env.int("DATABASE_CONN_MAX_AGE", default=0),
+        "CONN_HEALTH_CHECKS": env.bool("DATABASE_CONN_HEALTH_CHECKS", default=True),
+    }
 }
 
 # ─── Cache & Shared CRM Rate-Limit Storage ────────────────────────────────────
@@ -154,9 +159,11 @@ TIME_ZONE = "Asia/Kolkata"
 USE_I18N = True
 USE_TZ = True
 
-# ─── Static Files ─────────────────────────────────────────────────────────────
+# ─── Static & Media Files ─────────────────────────────────────────────────────
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # ─── Admin Web CRM Session Login Settings ─────────────────────────────────────
 LOGIN_URL = "/crm/login/"
@@ -170,14 +177,40 @@ CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS = env.int(
     "CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS", default=60
 )
 CRM_TRUST_X_FORWARDED_FOR = env.bool("CRM_TRUST_X_FORWARDED_FOR", default=False)
+CRM_TRUST_X_FORWARDED_PROTO = env.bool("CRM_TRUST_X_FORWARDED_PROTO", default=False)
 CRM_TRUSTED_PROXY_IPS = tuple(
     ip.strip()
     for ip in env.list("CRM_TRUSTED_PROXY_IPS", default=[])
     if ip and ip.strip()
 )
 
+# ─── HTTPS, Cookie, CSRF & Reverse-Proxy Security Settings ────────────────────
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
+SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=SECURE_SSL_REDIRECT)
+CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=SECURE_SSL_REDIRECT)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = env.str("SESSION_COOKIE_SAMESITE", default="Lax")
+CSRF_COOKIE_SAMESITE = env.str("CSRF_COOKIE_SAMESITE", default="Lax")
+
+# HSTS is disabled (0) by default and only active when explicitly set alongside HTTPS
+SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool(
+    "SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False
+)
+SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=False)
+SECURE_REFERRER_POLICY = env.str(
+    "SECURE_REFERRER_POLICY", default="strict-origin-when-cross-origin"
+)
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in env.list("CSRF_TRUSTED_ORIGINS", default=[])
+    if origin and origin.strip()
+]
+
 from apps.webcrm.rate_limit import (  # noqa: E402
+    resolve_secure_proxy_ssl_header,
     validate_login_rate_limit_settings,
+    validate_production_security_settings,
     validate_table_identifier,
 )
 
@@ -188,12 +221,20 @@ validate_login_rate_limit_settings(
     window_seconds=CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
     trusted_proxies=CRM_TRUSTED_PROXY_IPS,
 )
+SECURE_PROXY_SSL_HEADER = resolve_secure_proxy_ssl_header(
+    trust_x_forwarded_proto=CRM_TRUST_X_FORWARDED_PROTO,
+    trusted_proxies=CRM_TRUSTED_PROXY_IPS,
+)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Lead spreadsheet import guardrails and staging lifecycle.
+# Lead spreadsheet import guardrails, Django upload limits & media permissions.
 LEAD_IMPORT_MAX_FILE_SIZE = 5 * 1024 * 1024
 LEAD_IMPORT_MAX_REQUEST_SIZE = 6 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = LEAD_IMPORT_MAX_REQUEST_SIZE
+FILE_UPLOAD_MAX_MEMORY_SIZE = LEAD_IMPORT_MAX_FILE_SIZE
+FILE_UPLOAD_PERMISSIONS = 0o640
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750
 LEAD_IMPORT_MAX_ROWS = 5000
 LEAD_IMPORT_MAX_CSV_COLUMNS = 100
 LEAD_IMPORT_MAX_XLSX_ROW_ELEMENTS = 5001
@@ -259,6 +300,16 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_ALL_ORIGINS = env("CORS_ALLOW_ALL_ORIGINS")
 
+validate_production_security_settings(
+    debug=DEBUG,
+    secure_ssl_redirect=SECURE_SSL_REDIRECT,
+    secure_hsts_seconds=SECURE_HSTS_SECONDS,
+    trust_x_forwarded_proto=CRM_TRUST_X_FORWARDED_PROTO,
+    trusted_proxies=CRM_TRUSTED_PROXY_IPS,
+    csrf_trusted_origins=CSRF_TRUSTED_ORIGINS,
+    cors_allow_all_origins=CORS_ALLOW_ALL_ORIGINS,
+)
+
 # ─── HTTP Security Headers ────────────────────────────────────────────────────
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -295,7 +346,7 @@ LOGGING = {
         },
         "apps.accounts": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": env("DJANGO_LOG_LEVEL"),
             "propagate": False,
         },
         "apps.webcrm": {

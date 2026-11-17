@@ -407,7 +407,7 @@ The responsive Django + Bootstrap 5 + HTMX Admin CRM web interface is served und
       - Example Nginx reverse-proxy and static-file configuration (when Nginx runs on `127.0.0.1` and forwards to Gunicorn/Daphne):
         ```nginx
         location /static/ {
-            alias /path/to/consultancy-crm/staticfiles/;
+            alias /path/to/IQRA_TCS/consultancy-crm/staticfiles/;
             expires 30d;
             add_header Cache-Control "public, no-transform";
         }
@@ -421,23 +421,10 @@ The responsive Django + Bootstrap 5 + HTMX Admin CRM web interface is served und
             proxy_pass http://127.0.0.1:8000;
         }
         ```
-        With matching environment configuration: `CRM_TRUST_X_FORWARDED_FOR=True` and `CRM_TRUSTED_PROXY_IPS=127.0.0.1`.
+        With matching environment configuration: `CRM_TRUST_X_FORWARDED_FOR=True`, `CRM_TRUST_X_FORWARDED_PROTO=True`, and `CRM_TRUSTED_PROXY_IPS=127.0.0.1`.
         In production (`DEBUG=False`), run `python manage.py collectstatic --noinput` so Nginx serves `/static/` directly from `STATIC_ROOT` (`staticfiles/`). In local development (`DEBUG=True`), Django serves `/static/` via `staticfiles_urlpatterns()`.
 - **Session Logout (`POST /crm/logout/`)**: POST-only CSRF-protected logout endpoint (`GET` returns `405 Method Not Allowed`).
 - **Role Enforcement**: Active ordinary `EMPLOYEE` accounts and inactive accounts are rejected at `/crm/login/` and receive `403 Forbidden` on all `/crm/` views.
-
-### 7.3 Deployment & Environment Variables
-
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `DATABASE_URL` | `postgres://apple@localhost:5432/iqra_tcs_crm` | Primary PostgreSQL connection URL for IQRA TCS CRM. |
-| `CACHE_URL` | *(empty)* | Optional cache URL for `CACHES["default"]` (DRF API throttling). Never overrides `CACHES["crm_ratelimit"]`. |
-| `CRM_SHARED_CACHE_TABLE` | `iqra_shared_cache` | PostgreSQL table name used by `PostgresAtomicCache` (validated against `[A-Za-z_][A-Za-z0-9_]{0,45}`). |
-| `CRM_LOGIN_MAX_ATTEMPTS` | `5` | Maximum failed `/crm/login/` attempts per normalized `(username, client_ip)` within the window (`>= 1`). |
-| `CRM_LOGIN_MAX_IP_ATTEMPTS` | `5` | Maximum failed `/crm/login/` attempts per `client_ip` across all usernames within the window (`>= 1`). |
-| `CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate-limit window duration in seconds for `/crm/login/` (`>= 1`). |
-| `CRM_TRUST_X_FORWARDED_FOR` | `False` | Enable `X-Forwarded-For` evaluation only when `REMOTE_ADDR` is in `CRM_TRUSTED_PROXY_IPS`. |
-| `CRM_TRUSTED_PROXY_IPS` | *(empty)* | Comma-separated list of trusted reverse-proxy IPs or CIDRs (e.g. `127.0.0.1,10.0.0.2`). Required for `X-Forwarded-For` to be trusted. |
 
 ### 7.2 Web CRM Routes
 - **Dashboard (`/crm/`)**: Live organization workload snapshot, period performance metrics (`Asia/Kolkata`), current lead status breakdown, call outcome snapshot distribution, daily call trend bars, and employee workload/performance overview (with HTMX partial updates).
@@ -456,3 +443,90 @@ The responsive Django + Bootstrap 5 + HTMX Admin CRM web interface is served und
   - `GET /crm/follow-ups/` & `GET /crm/follow-ups/<id>/` — Filter follow-ups (`overdue`, `today`, `upcoming`, `COMPLETED`, `CANCELLED`), inspect `FollowUpEvent` audit history, and cancel pending follow-ups for inactive employees with a mandatory nonblank reason (`POST /crm/follow-ups/<id>/cancel/`).
 - **Reports & Exports (`/crm/reports/`, `/crm/reports/export/`)**:
   - Interactive reporting center and CSV/XLSX download launcher backed by `apps.reports`.
+
+---
+
+## 8. Production Configuration, Database & Deployment Reference
+
+### 8.1 Environment Variable Reference
+
+| Variable | Default | Production Requirement | Description |
+| :--- | :--- | :--- | :--- |
+| `SECRET_KEY` | *(required)* | Cryptographic random string (`>=50` chars) | Signs Django sessions, CSRF tokens, and HS256 JWT tokens. |
+| `DEBUG` | `False` | `False` | Must be `False` in production. |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | `iqracentral.com,www.iqracentral.com` | Comma-separated allowed hostnames. |
+| `DATABASE_URL` | `postgres://apple@localhost:5432/iqra_tcs_crm` | `postgres://<user>:<pass>@<host>:5432/iqra_tcs_crm` | Primary PostgreSQL database connection URL. |
+| `DATABASE_CONN_MAX_AGE` | `0` | `60` | Persistent database connection lifetime in seconds. |
+| `DATABASE_CONN_HEALTH_CHECKS` | `True` | `True` | Verifies pooled connections before reuse. |
+| `SECURE_SSL_REDIRECT` | `False` | `True` (when HTTPS is active) | Redirects plain HTTP requests to HTTPS. |
+| `SESSION_COOKIE_SECURE` | Matches `SECURE_SSL_REDIRECT` | `True` | Transmits session cookies over HTTPS only. |
+| `CSRF_COOKIE_SECURE` | Matches `SECURE_SSL_REDIRECT` | `True` | Transmits CSRF cookies over HTTPS only. |
+| `SESSION_COOKIE_SAMESITE` | `Lax` | `Lax` | SameSite attribute for session cookies. |
+| `CSRF_COOKIE_SAMESITE` | `Lax` | `Lax` | SameSite attribute for CSRF cookies. |
+| `SECURE_REFERRER_POLICY` | `strict-origin-when-cross-origin` | `strict-origin-when-cross-origin` | Referrer-Policy response header. |
+| `CSRF_TRUSTED_ORIGINS` | `[]` | `https://iqracentral.com,https://www.iqracentral.com` | Allowed origins for state-changing HTTPS POST requests. |
+| `SECURE_HSTS_SECONDS` | `0` | `31536000` (after HTTPS verification) | HTTP Strict Transport Security header duration. Validated at startup to require `SECURE_SSL_REDIRECT=True` or `CRM_TRUST_X_FORWARDED_PROTO=True`. |
+| `SECURE_HSTS_INCLUDE_SUBDOMAINS` | `False` | `True` (optional) | Includes subdomains in HSTS policy. |
+| `SECURE_HSTS_PRELOAD` | `False` | `False` (enable only if preloading) | Adds `preload` directive to HSTS header. |
+| `CORS_ALLOWED_ORIGINS` | `[]` | `https://iqracentral.com` | Explicit allowed browser origins for CORS. |
+| `CORS_ALLOW_ALL_ORIGINS` | `False` | `False` (enforced when `DEBUG=False` & HTTPS) | Wildcard CORS is rejected at startup in HTTPS production. |
+| `CACHE_URL` | *(empty)* | Optional | Configures `CACHES["default"]` (DRF throttling). Never overrides `CACHES["crm_ratelimit"]`. |
+| `CRM_SHARED_CACHE_TABLE` | `iqra_shared_cache` | `iqra_shared_cache` | PostgreSQL table used by `PostgresAtomicCache` (`[A-Za-z_][A-Za-z0-9_]{0,45}`); no Redis service is required for `/crm/login/` rate limiting. |
+| `CRM_LOGIN_MAX_ATTEMPTS` | `5` | `5` (`>= 1`) | Max failed `/crm/login/` attempts per `(username, client_ip)` per window. |
+| `CRM_LOGIN_MAX_IP_ATTEMPTS` | `5` | `5` (`>= 1`) | Max failed `/crm/login/` attempts per `client_ip` across all usernames per window. |
+| `CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `60` | `60` (`>= 1`) | Rate-limit window duration in seconds. |
+| `CRM_TRUST_X_FORWARDED_FOR` | `False` | `True` (behind local Nginx) | Evaluates `X-Forwarded-For` right-to-left only when `REMOTE_ADDR` matches `CRM_TRUSTED_PROXY_IPS`. |
+| `CRM_TRUST_X_FORWARDED_PROTO` | `False` | `True` (behind local Nginx) | Enables `SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")` and `TrustedProxyHeaderMiddleware` verification that `REMOTE_ADDR` matches `CRM_TRUSTED_PROXY_IPS`. |
+| `CRM_TRUSTED_PROXY_IPS` | `()` | `127.0.0.1` | Comma-separated trusted reverse-proxy IPs or CIDRs (wildcard `0.0.0.0/0` and `::/0` are rejected). |
+| `DJANGO_LOG_LEVEL` | `INFO` | `INFO` | Log verbosity for `django`, `apps.accounts`, and `apps.webcrm`. |
+
+### 8.2 Upload, Static & Media Alignment (5 MB File Limit vs. 6 MB Multipart Request Limit)
+
+- **Upload Limits (File Size vs. Complete Multipart Request Size)**:
+  - **Application Import File Limit (`5 MB` / `5,242,880` bytes)**: `LEAD_IMPORT_MAX_FILE_SIZE = 5 * 1024 * 1024` and `FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024` cap the raw uploaded CSV/XLSX file stream (`LeadImportSizeLimitUploadHandler` stops streaming immediately if the file exceeds `5 MB`).
+  - **Application & Reverse-Proxy Multipart Request Limit (`6 MB` / `6,291,456` bytes)**: `LEAD_IMPORT_MAX_REQUEST_SIZE = 6 * 1024 * 1024`, `DATA_UPLOAD_MAX_MEMORY_SIZE = 6 * 1024 * 1024` (enforced prior to multipart parsing by `LeadImportUploadLimitMiddleware` on `/api/v1/leads/import/preview/` and `/crm/leads/import/preview/`), and Nginx `client_max_body_size 6m;` cap the complete HTTP `multipart/form-data` request body (`Content-Length`).
+  - **Why Request Size (`6 MB`) > File Size (`5 MB`)**: A `multipart/form-data` POST request wraps the raw spreadsheet file with MIME boundary delimiters, per-part `Content-Disposition` / `Content-Type` headers, the CSRF token field, and optional form fields (`assigned_to_id`, `source`, etc.). Setting the complete request limit to `6 MB` (`1 MB` headroom above the `5 MB` file limit) ensures a legitimate `5 MB` file upload is never rejected because of multipart framing overhead while still bounding total request memory before multipart parsing begins.
+- **Static & Media Files**:
+  - `STATIC_URL = "/static/"`, `STATIC_ROOT = BASE_DIR / "staticfiles"`.
+  - `MEDIA_URL = "/media/"`, `MEDIA_ROOT = BASE_DIR / "media"`.
+  - `FILE_UPLOAD_PERMISSIONS = 0o640` and `FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750`.
+  - When `DEBUG=False`, Django registers **no** static-file routes; Nginx serves `/static/` directly from `STATIC_ROOT`.
+
+### 8.3 PostgreSQL Readiness, Migration Order, Backup & Restore
+
+- **PostgreSQL Compatibility & Privileges**:
+  - Compatible with PostgreSQL `14+` (`14`, `15`, `16`).
+  - No superuser database extensions are required. The application database user requires `CONNECT` and `TEMP` on `iqra_tcs_crm` and `USAGE, CREATE` on schema `public` (for migrations and `iqra_shared_cache` table/index creation).
+- **Migration Order**:
+  1. `accounts.0001_initial` (custom `User` model)
+  2. `leads.0001_initial` through `leads.0008_stagedleadimport_processing_started_at_and_more`
+  3. `calls.0001_initial` → `calls.0002_seed_default_outcomes` → `calls.0003_calloutcome_code_immutable` (PostgreSQL trigger enforcing immutable `CallOutcome.code`) → `calls.0004_harden_call_outcome_code_format`
+  4. `followups.0001_initial` → `followups.0002_followupevent_idempotency_key_and_more`
+  5. `token_blacklist` migrations (SimpleJWT refresh token revocation tables)
+  6. `post_migrate` hook (`apps.webcrm.rate_limit.ensure_shared_cache_table`) — creates `iqra_shared_cache` and `iqra_shared_cache_expires_idx` under `pg_advisory_xact_lock`.
+- **Pre-Deployment Backup & Restore**:
+  ```bash
+  # Create compressed custom-format backup before migrating:
+  pg_dump -Fc --no-acl --no-owner -h localhost -U iqra_user -d iqra_tcs_crm -f iqra_tcs_crm_$(date +%Y%m%d_%H%M%S).dump
+
+  # Restore backup into target database if rollback is required:
+  pg_restore --clean --if-exists --no-acl --no-owner -h localhost -U iqra_user -d iqra_tcs_crm iqra_tcs_crm_<timestamp>.dump
+  ```
+
+### 8.4 Operational Management Commands & Scheduled Maintenance
+
+- **Create Initial Administrator Account** (interactive `getpass` prompt, never echoes password):
+  ```bash
+  .venv/bin/python manage.py create_admin --username admin --email admin@iqracentral.com --first-name "IQRA" --last-name "Admin"
+  ```
+- **Staged Lead Import Cleanup & Crash Recovery** (recommended cron every 15 minutes):
+  ```bash
+  # Erase staged import preview rows past their 30-minute TTL:
+  .venv/bin/python manage.py cleanup_staged_lead_imports
+
+  # Recover any PROCESSING staged imports abandoned for >60 minutes:
+  .venv/bin/python manage.py recover_staged_lead_imports
+  ```
+- **Health Verification**:
+  - System & deployment configuration check: `.venv/bin/python manage.py check --deploy`
+  - HTTP readiness check: `GET https://iqracentral.com/crm/login/` (returns `200 OK`).

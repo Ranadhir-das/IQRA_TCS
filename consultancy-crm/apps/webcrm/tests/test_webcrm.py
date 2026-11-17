@@ -1905,6 +1905,154 @@ class WebCRMReportsAndExportsTests(BaseWebCRMTestCase):
             html,
         )
 
+    def test_production_security_and_upload_settings_validation(self):
+        """Production Hardening — Verify upload limits, media permissions, and HTTPS/HSTS/proxy header guards."""
+        from apps.webcrm.rate_limit import (
+            RateLimitConfigurationError,
+            resolve_secure_proxy_ssl_header,
+            validate_production_security_settings,
+        )
+
+        # Upload & media permissions match import guardrails
+        self.assertEqual(settings.LEAD_IMPORT_MAX_FILE_SIZE, 5 * 1024 * 1024)
+        self.assertEqual(settings.LEAD_IMPORT_MAX_REQUEST_SIZE, 6 * 1024 * 1024)
+        self.assertEqual(
+            settings.DATA_UPLOAD_MAX_MEMORY_SIZE,
+            settings.LEAD_IMPORT_MAX_REQUEST_SIZE,
+        )
+        self.assertEqual(
+            settings.FILE_UPLOAD_MAX_MEMORY_SIZE,
+            settings.LEAD_IMPORT_MAX_FILE_SIZE,
+        )
+        self.assertEqual(settings.FILE_UPLOAD_PERMISSIONS, 0o640)
+        self.assertEqual(settings.FILE_UPLOAD_DIRECTORY_PERMISSIONS, 0o750)
+        self.assertTrue(settings.SESSION_COOKIE_HTTPONLY)
+
+        # X-Forwarded-Proto is never trusted without CRM_TRUSTED_PROXY_IPS or with wildcard CIDRs
+        self.assertIsNone(
+            resolve_secure_proxy_ssl_header(
+                trust_x_forwarded_proto=False,
+                trusted_proxies=("127.0.0.1",),
+            )
+        )
+        with self.assertRaises(RateLimitConfigurationError):
+            resolve_secure_proxy_ssl_header(
+                trust_x_forwarded_proto=True,
+                trusted_proxies=(),
+            )
+        for wildcard_proxy in ("0.0.0.0/0", "::/0", "0.0.0.0", "::"):
+            with self.assertRaises(RateLimitConfigurationError):
+                resolve_secure_proxy_ssl_header(
+                    trust_x_forwarded_proto=True,
+                    trusted_proxies=(wildcard_proxy,),
+                )
+        self.assertEqual(
+            resolve_secure_proxy_ssl_header(
+                trust_x_forwarded_proto=True,
+                trusted_proxies=("127.0.0.1",),
+            ),
+            ("HTTP_X_FORWARDED_PROTO", "https"),
+        )
+
+        # TrustedProxyHeaderMiddleware strips spoofed X-Forwarded-Proto from untrusted REMOTE_ADDR
+        from django.test import RequestFactory
+        from apps.webcrm.rate_limit import TrustedProxyHeaderMiddleware
+
+        rf = RequestFactory()
+
+        seen_schemes: list[bool] = []
+        mw = TrustedProxyHeaderMiddleware(
+            lambda req: seen_schemes.append(req.is_secure())
+        )
+        with override_settings(
+            CRM_TRUST_X_FORWARDED_PROTO=True,
+            CRM_TRUSTED_PROXY_IPS=("127.0.0.1",),
+            SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https"),
+        ):
+            untrusted_req = rf.get(
+                "/crm/login/",
+                REMOTE_ADDR="203.0.113.77",
+                HTTP_X_FORWARDED_PROTO="https",
+            )
+            mw(untrusted_req)
+            trusted_req = rf.get(
+                "/crm/login/",
+                REMOTE_ADDR="127.0.0.1",
+                HTTP_X_FORWARDED_PROTO="https",
+            )
+            mw(trusted_req)
+        self.assertEqual(seen_schemes, [False, True])
+
+        # HSTS > 0 is rejected when neither SECURE_SSL_REDIRECT nor trusted proxy TLS is enabled
+        with self.assertRaises(RateLimitConfigurationError):
+            validate_production_security_settings(
+                debug=False,
+                secure_ssl_redirect=False,
+                secure_hsts_seconds=31536000,
+                trust_x_forwarded_proto=False,
+                trusted_proxies=(),
+            )
+
+        # Non-HTTPS CSRF_TRUSTED_ORIGINS or CORS_ALLOW_ALL_ORIGINS=True rejected when HTTPS is enforced in production
+        with self.assertRaises(RateLimitConfigurationError):
+            validate_production_security_settings(
+                debug=False,
+                secure_ssl_redirect=True,
+                secure_hsts_seconds=31536000,
+                csrf_trusted_origins=["http://iqracentral.com"],
+            )
+        with self.assertRaises(RateLimitConfigurationError):
+            validate_production_security_settings(
+                debug=False,
+                secure_ssl_redirect=True,
+                secure_hsts_seconds=31536000,
+                cors_allow_all_origins=True,
+            )
+
+        # Valid production HTTPS configuration passes cleanly
+        validate_production_security_settings(
+            debug=False,
+            secure_ssl_redirect=True,
+            secure_hsts_seconds=31536000,
+            trust_x_forwarded_proto=True,
+            trusted_proxies=("127.0.0.1",),
+            csrf_trusted_origins=["https://iqracentral.com"],
+            cors_allow_all_origins=False,
+        )
+
+        # Official branding static assets and template references
+        from django.contrib.staticfiles import finders
+
+        for asset_rel in (
+            "webcrm/images/logo.png",
+            "webcrm/images/favicon.ico",
+            "webcrm/images/favicon-32x32.png",
+            "webcrm/images/apple-touch-icon.png",
+        ):
+            resolved_path = finders.find(asset_rel)
+            self.assertIsNotNone(resolved_path, f"Missing static asset: {asset_rel}")
+
+        dash_resp = self.client.get(reverse("webcrm:dashboard"))
+        self.assertEqual(dash_resp.status_code, 200)
+        self.assertContains(dash_resp, "/static/webcrm/images/logo.png?v=20261117")
+        self.assertContains(dash_resp, "/static/webcrm/images/favicon.ico?v=20261117")
+        self.assertContains(dash_resp, 'alt="IQRA TCS official logo"')
+
+        favicon_resp = self.client.get("/favicon.ico")
+        self.assertEqual(favicon_resp.status_code, 302)
+        self.assertEqual(
+            favicon_resp["Location"],
+            "/static/webcrm/images/favicon.ico?v=20261117",
+        )
+
+        self.client.logout()
+        login_resp = self.client.get(reverse("webcrm:login"))
+        self.assertEqual(login_resp.status_code, 200)
+        self.assertContains(login_resp, "/static/webcrm/images/logo.png?v=20261117")
+        self.assertContains(login_resp, "/static/webcrm/images/favicon.ico?v=20261117")
+        self.assertContains(login_resp, "/static/webcrm/images/favicon-32x32.png?v=20261117")
+        self.assertContains(login_resp, "/static/webcrm/images/apple-touch-icon.png?v=20261117")
+
 
 @skipUnless(
     connection.vendor == "postgresql",

@@ -7,6 +7,7 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { BrandLogo } from '../components/BrandLogo.tsx';
 import { APP_NAME, APP_SUBTITLE } from '../constants/config.ts';
 import { AppThemeProvider, useAppTheme } from '../context/AppThemeContext.tsx';
 import { AuthProvider, useAuth } from '../context/AuthContext.tsx';
@@ -56,9 +57,11 @@ function RootNavigator() {
   if (!ready || status === 'loading') {
     return (
       <View style={[styles.splashContainer, { backgroundColor: colors.background }]}>
-        <View style={[styles.brandBadge, { backgroundColor: colors.primaryDark }]}>
-          <Text style={styles.brandBadgeText}>IQ</Text>
-        </View>
+        <BrandLogo
+          size={96}
+          accessibilityLabel="IQRA TCS official logo"
+          style={styles.brandLogoSpacing}
+        />
         <Text style={[styles.splashTitle, { color: colors.text }]}>{APP_NAME}</Text>
         <Text style={[styles.splashSubtitle, { color: colors.muted }]}>
           {APP_SUBTITLE}
@@ -129,19 +132,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
-  brandBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  brandLogoSpacing: {
     marginBottom: 16,
-  },
-  brandBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: 1,
   },
   splashTitle: {
     fontSize: 24,

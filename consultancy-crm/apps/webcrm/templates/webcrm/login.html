@@ -5,7 +5,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Administrator Sign In — IQRA TCS CRM</title>
-  <link rel="stylesheet" href="{% static 'webcrm/css/crm.css' %}">
+  <link rel="icon" type="image/x-icon" href="{% static 'webcrm/images/favicon.ico' %}?v=20261117">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'webcrm/images/favicon-32x32.png' %}?v=20261117">
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'webcrm/images/apple-touch-icon.png' %}?v=20261117">
+  <link rel="stylesheet" href="{% static 'webcrm/css/crm.css' %}?v=20261117">
 </head>
 <body>
   <div class="crm-login-wrapper">
@@ -14,7 +17,13 @@
       <div class="crm-login-aside">
         <div>
           <div class="d-flex align-items-center gap-3">
-            <span class="crm-brand-mark">IQ</span>
+            <span class="crm-brand-logo-wrap crm-brand-logo-wrap--lg">
+              <img src="{% static 'webcrm/images/logo.png' %}?v=20261117"
+                   alt="IQRA TCS official logo"
+                   class="crm-brand-logo"
+                   width="50"
+                   height="50">
+            </span>
             <div>
               <div class="crm-brand-title">IQRA TCS CRM</div>
               <div class="crm-brand-sub">iqracentral.com</div>
@@ -118,6 +127,6 @@
       </div>
     </div>
   </div>
-  <script src="{% static 'webcrm/js/crm.js' %}"></script>
+  <script src="{% static 'webcrm/js/crm.js' %}?v=20261117"></script>
 </body>
 </html>

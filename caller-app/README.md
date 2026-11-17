@@ -67,6 +67,7 @@ cp .env.example .env
 - **Production**:
   ```env
   APP_ENV=production
+  EXPO_PUBLIC_APP_ENV=production
   EXPO_PUBLIC_API_BASE_URL=https://iqracentral.com/api/v1
   ```
 
@@ -86,9 +87,34 @@ npm run typecheck
 # ESLint check
 npm run lint
 
-# Automated unit tests (Phase 1 & Phase 2 suites: 24 tests)
+# Automated unit tests (Phase 1 & Phase 2 suites: 26 tests)
 npm test
 
 # Public Expo config verification
 npx expo config --type public
 ```
+
+---
+
+## Production Configuration & Build Readiness
+
+### Production API Guardrails (`src/constants/config.ts` & `app.config.js`)
+- **Default Production Base URL**: `https://iqracentral.com/api/v1`
+- **Strict Production Validation**: When `APP_ENV=production` (or `EXPO_PUBLIC_APP_ENV=production`):
+  1. `EXPO_PUBLIC_API_BASE_URL` (if set) **must** begin with `https://`.
+  2. Any localhost (`localhost`, `127.0.0.1`, `::1`), Android emulator (`10.0.2.2`), RFC1918 private LAN (`10.x.x.x`, `172.16-31.x.x`, `192.168.x.x`), link-local (`169.254.x.x`), or `.local`/`.lan` developer hostname is **rejected at build and runtime** so a production build can never accidentally point at a developer LAN machine.
+- **Minimal Android Permissions (`app.json`)**:
+  - Requests only `android.permission.INTERNET`.
+  - Explicitly blocks `CALL_PHONE`, `READ_CALL_LOG`, `WRITE_CALL_LOG`, `READ_PHONE_STATE`, `PROCESS_OUTGOING_CALLS`, `CAMERA`, `RECORD_AUDIO`, `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `READ_EXTERNAL_STORAGE`, and `WRITE_EXTERNAL_STORAGE`.
+
+### Production Build Prerequisites & Commands
+1. Ensure no local developer `.env` overrides remain active (or set `APP_ENV=production`, `EXPO_PUBLIC_APP_ENV=production`, and `EXPO_PUBLIC_API_BASE_URL=https://iqracentral.com/api/v1`).
+2. Verify production Expo configuration before building:
+   ```bash
+   APP_ENV=production EXPO_PUBLIC_APP_ENV=production EXPO_PUBLIC_API_BASE_URL=https://iqracentral.com/api/v1 npx expo config --type public
+   ```
+3. Once final brand icon/splash assets and Android release signing credentials (supplied externally via environment/EAS or untracked local keystore) are approved:
+   ```bash
+   # Local release APK/AAB build (requires ANDROID_HOME and JDK 17):
+   APP_ENV=production EXPO_PUBLIC_APP_ENV=production npx expo run:android --variant release
+   ```

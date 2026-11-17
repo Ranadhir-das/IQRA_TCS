@@ -138,9 +138,10 @@ cp .env.example .env
   APP_ENV=development
   EXPO_PUBLIC_API_BASE_URL=http://<YOUR_MAC_LAN_IP>:8000/api/v1
   ```
-- **Production (`https://` enforced automatically when `APP_ENV=production`)**:
+- **Production (`https://` enforced automatically when `APP_ENV=production` / `EXPO_PUBLIC_APP_ENV=production`)**:
   ```env
   APP_ENV=production
+  EXPO_PUBLIC_APP_ENV=production
   EXPO_PUBLIC_API_BASE_URL=https://iqracentral.com/api/v1
   ```
 
@@ -151,6 +152,7 @@ npm test
 npm run typecheck
 npm run lint
 npx expo config --type public
+APP_ENV=production EXPO_PUBLIC_APP_ENV=production EXPO_PUBLIC_API_BASE_URL=https://iqracentral.com/api/v1 npx expo config --type public
 ```
 
 ### Android Build Instructions
@@ -162,8 +164,83 @@ npx expo run:android
 
 ---
 
-## 5. Environment & Security Boundaries
+## 5. Environment, Production Deployment Readiness & Rollback Reference
 
-- **No Committed Secrets**: `.env` files, Django `SECRET_KEY` values, PostgreSQL credentials, JWT tokens, Android keystores (`*.jks`, `*.keystore`), and service-account JSON files are strictly excluded via `.gitignore`. Use [`consultancy-crm/.env.example`](./consultancy-crm/.env.example) and [`caller-app/.env.example`](./caller-app/.env.example) as templates.
-- **Complete Isolation from Vaani Infrastructure**:
-  - IQRA TCS (`iqracentral.com`, Android package `com.iqracentral.tcs.caller`, database `iqra_tcs_crm`) is completely independent of any Vaani repositories, databases, credentials, Firebase projects, signing keys, or deployment environments.
+> **Deployment Status:** The repository is configured and verified for production readiness. Live production cutover must only be executed after explicit operator authorization and TLS/reverse-proxy verification on `iqracentral.com`.
+
+### 5.1 Production Environment Variables (`consultancy-crm/.env`)
+
+| Variable | Production Value / Example | Purpose |
+| :--- | :--- | :--- |
+| `SECRET_KEY` | `<50+ char random secret>` | Cryptographic signing key for sessions, CSRF, and JWTs. |
+| `DEBUG` | `False` | Disables debug stack traces and development static serving. |
+| `ALLOWED_HOSTS` | `iqracentral.com,www.iqracentral.com` | Permitted `Host` headers. |
+| `DATABASE_URL` | `postgres://<user>:<pass>@<host>:5432/iqra_tcs_crm` | PostgreSQL `14+` connection string. |
+| `DATABASE_CONN_MAX_AGE` | `60` | Persistent connection lifetime (seconds). |
+| `DATABASE_CONN_HEALTH_CHECKS` | `True` | Pre-query connection health validation. |
+| `SECURE_SSL_REDIRECT` | `True` | Enforces HTTPS redirection (enable only when TLS is active). |
+| `SESSION_COOKIE_SECURE` | `True` | Restricts CRM session cookie to HTTPS. |
+| `CSRF_COOKIE_SECURE` | `True` | Restricts CSRF cookie to HTTPS. |
+| `SESSION_COOKIE_SAMESITE` | `Lax` | SameSite policy for session cookies. |
+| `CSRF_COOKIE_SAMESITE` | `Lax` | SameSite policy for CSRF cookies. |
+| `SECURE_REFERRER_POLICY` | `strict-origin-when-cross-origin` | Referrer-Policy response header. |
+| `CSRF_TRUSTED_ORIGINS` | `https://iqracentral.com,https://www.iqracentral.com` | Trusted HTTPS origins for CSRF verification. |
+| `SECURE_HSTS_SECONDS` | `31536000` *(set after HTTPS is verified)* | Enables 1-year HSTS (startup-validated to require HTTPS). |
+| `SECURE_HSTS_INCLUDE_SUBDOMAINS` | `True` *(optional)* | Includes subdomains in HSTS policy. |
+| `SECURE_HSTS_PRELOAD` | `False` | Controls HSTS `preload` directive. |
+| `CORS_ALLOWED_ORIGINS` | `https://iqracentral.com` | Allowed browser origins. |
+| `CORS_ALLOW_ALL_ORIGINS` | `False` | Disables wildcard CORS (enforced `False` in HTTPS production). |
+| `CACHE_URL` | *(optional / empty)* | Configures `CACHES["default"]` (DRF throttling) only; never overrides `CACHES["crm_ratelimit"]`. |
+| `CRM_SHARED_CACHE_TABLE` | `iqra_shared_cache` | PostgreSQL table used by `PostgresAtomicCache` for `/crm/login/` rate limiting (no Redis required). |
+| `CRM_LOGIN_MAX_ATTEMPTS` | `5` | Max failed login attempts per `(username, IP)` per `60s`. |
+| `CRM_LOGIN_MAX_IP_ATTEMPTS` | `5` | Max failed login attempts per `IP` across all users per `60s`. |
+| `CRM_LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `60` | Login rate-limit window in seconds. |
+| `CRM_TRUST_X_FORWARDED_FOR` | `True` | Evaluates `X-Forwarded-For` right-to-left only from `CRM_TRUSTED_PROXY_IPS`. |
+| `CRM_TRUST_X_FORWARDED_PROTO` | `True` | Honors `X-Forwarded-Proto: https` only when `REMOTE_ADDR` matches `CRM_TRUSTED_PROXY_IPS`. |
+| `CRM_TRUSTED_PROXY_IPS` | `127.0.0.1` | Trusted Nginx reverse-proxy IP/CIDR allowlist (wildcard `0.0.0.0/0` and `::/0` are rejected). |
+| `DJANGO_LOG_LEVEL` | `INFO` | Log verbosity for `django`, `apps.accounts`, and `apps.webcrm`. |
+
+### 5.2 Nginx, Static Files & Upload Limit Alignment (5 MB File vs. 6 MB Multipart Request)
+- **File Size vs. Complete Multipart Request Size**:
+  - **Uploaded Spreadsheet File Limit (`5 MB` / `5,242,880` bytes)**: `LEAD_IMPORT_MAX_FILE_SIZE = 5 MB` and `FILE_UPLOAD_MAX_MEMORY_SIZE = 5 MB` cap the raw CSV/XLSX file stream itself (`LeadImportSizeLimitUploadHandler` aborts streaming immediately if file bytes exceed `5 MB`).
+  - **Complete HTTP Multipart Request Limit (`6 MB` / `6,291,456` bytes)**: `LEAD_IMPORT_MAX_REQUEST_SIZE = 6 MB`, `DATA_UPLOAD_MAX_MEMORY_SIZE = 6 MB`, and Nginx `client_max_body_size 6m;` cap the entire `multipart/form-data` HTTP request body (`Content-Length`). The extra `1 MB` above the `5 MB` file limit accommodates multipart MIME boundaries, `Content-Disposition` headers, the CSRF token field, and form metadata fields (`assigned_to_id`, `source`, etc.) so a valid `5 MB` spreadsheet upload is never rejected due to multipart framing overhead.
+- **Static & Media Serving**: Run `.venv/bin/python manage.py collectstatic --noinput` to populate `consultancy-crm/staticfiles/` and serve `/static/` directly from Nginx (`alias /path/to/IQRA_TCS/consultancy-crm/staticfiles/;`). Django does not serve static files when `DEBUG=False`. Uploaded file permissions are restricted to `0o640` (`0o750` for directories).
+
+### 5.3 Production Deployment Checklist
+1. **Backup Database**:
+   ```bash
+   pg_dump -Fc --no-acl --no-owner -h localhost -U iqra_user -d iqra_tcs_crm -f iqra_tcs_crm_predeploy.dump
+   ```
+2. **Configure `.env` & Validate Deployment Settings**:
+   ```bash
+   cd consultancy-crm
+   .venv/bin/python manage.py check --deploy
+   .venv/bin/python manage.py makemigrations --check --dry-run
+   ```
+3. **Apply Migrations & Collect Static Assets**:
+   ```bash
+   .venv/bin/python manage.py migrate --noinput
+   .venv/bin/python manage.py collectstatic --noinput
+   ```
+4. **Provision Initial Admin User (First Deploy Only)**:
+   ```bash
+   .venv/bin/python manage.py create_admin --username admin --email admin@iqracentral.com
+   ```
+5. **Configure Scheduled Maintenance (Cron / systemd timer every 15m)**:
+   ```bash
+   .venv/bin/python manage.py cleanup_staged_lead_imports
+   .venv/bin/python manage.py recover_staged_lead_imports
+   ```
+6. **Start / Reload Gunicorn (`127.0.0.1:8000`) & Nginx** and verify `GET https://iqracentral.com/crm/login/` (`200 OK`) and `/static/webcrm/css/crm.css` (`200 OK`).
+
+### 5.4 Rollback Checklist
+1. Stop Gunicorn workers to halt writes.
+2. Restore pre-deployment PostgreSQL snapshot if schema/data rollback is required:
+   ```bash
+   pg_restore --clean --if-exists --no-acl --no-owner -h localhost -U iqra_user -d iqra_tcs_crm iqra_tcs_crm_predeploy.dump
+   ```
+3. Checkout the previous verified Git commit (`git checkout <previous_sha>`), run `.venv/bin/python manage.py collectstatic --noinput`, and restart Gunicorn.
+
+### 5.5 Security & Infrastructure Isolation
+- **No Committed Secrets**: `.env` files, `SECRET_KEY` values, database credentials, Android keystores (`*.jks`, `*.keystore`), and service-account JSON files are strictly excluded via `.gitignore`.
+- **Complete Isolation from Vaani Infrastructure**: IQRA TCS (`iqracentral.com`, package `com.iqracentral.tcs.caller`, database `iqra_tcs_crm`) is completely independent of any Vaani repositories, databases, credentials, Firebase projects, signing keys, or deployment environments.

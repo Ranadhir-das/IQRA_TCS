@@ -5,7 +5,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}IQRA TCS Admin CRM{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'webcrm/css/crm.css' %}">
+  <link rel="icon" type="image/x-icon" href="{% static 'webcrm/images/favicon.ico' %}?v=20261117">
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'webcrm/images/favicon-32x32.png' %}?v=20261117">
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'webcrm/images/apple-touch-icon.png' %}?v=20261117">
+  <link rel="stylesheet" href="{% static 'webcrm/css/crm.css' %}?v=20261117">
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
   <div class="crm-shell">
@@ -32,6 +35,11 @@
             {% include "webcrm/partials/icon.html" with name="panel-left" %}
           </button>
           <div class="crm-breadcrumb-bar">
+            <img src="{% static 'webcrm/images/logo.png' %}?v=20261117"
+                 alt="IQRA TCS logo"
+                 class="crm-topbar-logo"
+                 width="24"
+                 height="24">
             <span class="crm-breadcrumb-root">IQRA TCS</span>
             <span class="crm-breadcrumb-sep">/</span>
             <span class="crm-topbar-heading">{% block page_heading %}Calling CRM{% endblock %}</span>
@@ -92,6 +100,6 @@
   </div>
 
   {% include "webcrm/partials/confirm_modal.html" %}
-  <script src="{% static 'webcrm/js/crm.js' %}"></script>
+  <script src="{% static 'webcrm/js/crm.js' %}?v=20261117"></script>
 </body>
 </html>
